@@ -2,9 +2,7 @@ CIS 192 Project Proposal
 =======================
 
 Team members: Anand Sundaram, Yichen Wei
-
 Project Title: Spice Islands
-
 Github Repository: https://github.com/weyichen/SpiceIslands
 
 Outline
@@ -22,7 +20,7 @@ Division of labor
 ----------------
 Since there are only 2 group members and neither of us is specialized in any particular area of Python, we will not be designating any division of labor in the beginning, and simply learn and work on what is needed at the moment. If necessary, we will figure out an equitable distribution of labor later.
 
-Packages:
+Packages
 --------
 pygame
 flask
