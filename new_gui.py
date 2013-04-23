@@ -29,6 +29,8 @@ WINDOWWIDTH = 640 # size of window's width in pixels
 WINDOWHEIGHT = 480 # size of windows' height in pixels
 MARGIN = 20
 BOXSIZE = 40 # size of box height & width in pixels
+BGCOLOR_LEVEL = 25
+ISLANDSIZE = 4 * BOXSIZE # size of island bounding box height & width in pixels
 BOARDWIDTH = (WINDOWWIDTH - 2 * MARGIN) / BOXSIZE # number of columns of icons
 BOARDHEIGHT = (WINDOWHEIGHT - 2 * MARGIN) / BOXSIZE # number of rows of icons
 
@@ -177,30 +179,33 @@ class MainGui(gui.Desktop):
         ship_placed = False
         self.ship_pos = None
         
+        noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
+        rg = np.zeros(noise.shape, dtype=np.int8)
+        rg.fill(25)
+        bg = np.transpose(np.array([rg, rg, noise]))
+        water = pygame.surfarray.make_surface(bg)
+        
+        self.islands = {}
+        num_islands = 0
+        
         for x in range(4):
             for y in range(3):
+                (left, top) = (x * ISLANDSIZE, y * ISLANDSIZE)
                 world = map.Map('Island',
                 IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
                 if random.randint(1,3) > 1 and (x + y) % 2 == 0:
                     world.map = IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o)
                     world.draw_minimap()
-                    self.drape(world.minimap, (x * 160, y * 160))
+                    self.drape(world.minimap, (left, top))
+                    island_rect = pygame.Rect(left, top, ISLANDSIZE, ISLANDSIZE)
+                    self.islands[num_islands] = (False, island_rect)
+                    num_islands += 1
                 else:
-                    #noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
-                    
-                    # faster without noising
-                    blue = np.zeros((noise_w, noise_h), dtype=np.int8)
-                    blue.fill(OCEAN[2])
-                    
-                    rg = np.zeros(blue.shape, dtype=np.int8)
-                    rg.fill(25)
-                    bg = np.transpose(np.array([rg, rg, blue]))
-                    s = pygame.surfarray.make_surface(bg)
-                    self.drape(s, (x * 160, y* 160))
+                    self.drape(water, (left, top))
                     if not ship_placed:
-                        self.ship_pos = (x * 160 + 20, y * 160 + 20)
+                        self.ship_pos = (left + MARGIN, top + MARGIN)
                         ship_placed = True
-                        
+        
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
@@ -234,6 +239,7 @@ class MainGui(gui.Desktop):
                         self.game_area.repaint()
                         
                         if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
+                            visited = self.islands_at(box_x, box_y)
                             spice_no = random.randint(0,9)
                             spice_table.add(SPICELIST[spice_no])
                             spice_table.resize()
@@ -252,7 +258,7 @@ class MainGui(gui.Desktop):
         return dist < 100 and not self.is_island(slice)
     
     def is_island(self, slice):
-        return np.sum(slice != 25) > np.size(slice) / 2
+        return np.sum(slice != BGCOLOR_LEVEL) > np.size(slice) / 2
     
     def near_island(self, x, y, ship_pos, canvas):
         island = False
@@ -263,8 +269,18 @@ class MainGui(gui.Desktop):
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
                         island = True
-        
         return island
+        
+    def islands_at(self, box_x, box_y):
+        (left, top) = (box_x * BOXSIZE + MARGIN, box_y * BOXSIZE + MARGIN)
+        islands_here = []
+        box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
+        for island in self.islands:
+            island_rect = self.islands[island][1]
+            if island_rect.colliderect(box_rect):
+                islands_here.append(island)
+            else:
+        return islands_here
     
     def highlight_border(self, box_x, box_y, ship_pos, canvas):
         left, top = self.box_corner(box_x, box_y)
