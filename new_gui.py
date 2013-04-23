@@ -3,17 +3,40 @@ A container is added, and centered a button within that
 container.
 """
 import pygame
-import spiceIslands
+import random, pygame, sys, os
 from pygame.locals import *
+import map
+from perlin_noise import *
+from island_generator import *
+import numpy as np
 
 # the following line is not needed if pgu is installed
-import sys; sys.path.insert(0, "pgu")
+sys.path.insert(0, "pgu")
 from pgu import gui # TODO: figure out how to install pgu
 
 # global variable settings
 SHIPNAME = "SANTA MARIA"
 NUMTURNS = 30
 MOVESPTURN = 5
+
+FPS = 30 # frames per second, the general speed of the program
+WINDOWWIDTH = 640 # size of window's width in pixels
+WINDOWHEIGHT = 480 # size of windows' height in pixels
+MARGIN = 20
+BOXSIZE = 40 # size of box height & width in pixels
+BOARDWIDTH = (WINDOWWIDTH - 2 * MARGIN) / BOXSIZE # number of columns of icons
+BOARDHEIGHT = (WINDOWHEIGHT - 2 * MARGIN) / BOXSIZE # number of rows of icons
+
+# COLORS
+# NAME     (   R,   G,   B)
+NAVYBLUE = (  60,  60, 100)
+OCEAN    = (  25, 135, 255)
+GREEN    = (   0, 255,  85)
+RED      = ( 255,   0,   0)
+
+BGCOLOR = OCEAN
+BOXCOLOR = GREEN
+HIGHLIGHTCOLOR = RED
 
 # initial setup tbl
 class InitDialog(gui.Dialog):
@@ -79,34 +102,38 @@ class InitDialog(gui.Dialog):
 
 # drawing area where the action happens
 class DrawingArea(gui.Widget):
-    def __init__(this, width, height):
-        gui.Widget.__init__(this, width=width, height=height)
-        this.imageBuffer = pygame.Surface((width, height))
+    def __init__(self, width, height):
+        gui.Widget.__init__(self, width=width, height=height)
+        self.imageBuffer = pygame.Surface((width, height))
 
-    def paint(this, surf):
+    def paint(self, surf):
         # Paint whatever has been captured in the buffer
-        surf.blit(this.imageBuffer, (0, 0))
-
-    # Call this function to take a snapshot of whatever has been rendered
-    # onto the display over this widget.
-    def save_background(this):
+        surf.blit(self.imageBuffer, (0, 0))
+        
+    # Call self function to take a snapshot of whatever has been rendered
+    # onto the display over self widget.
+    def save_background(self):
         disp = pygame.display.get_surface()
-        this.imageBuffer.blit(disp, this.get_abs_rect())
+        self.imageBuffer.blit(disp, self.get_abs_rect())
         
 class MainGui(gui.Desktop):
-    gameAreaWidth = 500
+    gameAreaWidth = 480
+    gameAreaHeight = 640
     gameArea = None
     menuArea = None
 
-    def __init__(this, disp):
-        gui.Desktop.__init__(this)
+    def __init__(self, disp):
+        gui.Desktop.__init__(self)
+        
+        self.connect(gui.QUIT, self.quit, None)
 
         # Setup the 'game' area where the action takes place
-        this.gameArea = DrawingArea(this.gameAreaWidth,
-                                    disp.get_height())
+        self.gameArea = DrawingArea(self.gameAreaWidth,
+                                    self.gameAreaHeight)
+                                    
         # Setup the gui area
-        this.menuArea = gui.Container(
-            width=disp.get_width()-this.gameAreaWidth)
+        self.menuArea = gui.Container(
+            width=disp.get_width()-self.gameAreaWidth)
         
         tbl = gui.Table(height=disp.get_height())
         
@@ -136,14 +163,163 @@ class MainGui(gui.Desktop):
         tbl.td(sidebar)
 
         # column 2 : map tbl
-        tbl.td(this.gameArea)
+        tbl.td(self.gameArea)
         
-        this.init(tbl, disp)
+        self.init(tbl, disp)
 
+        noise_w = 40
+        noise_h = 40
+        noise_f = 1
+        noise_o = 5
+        
+        p = PerlinNoiseGenerator()
+        
+        raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
+        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (40, 40))
+        
+        shipPlaced = False
+        self.ship_pos = None
+        
+        for x in range(4):
+            for y in range(3):
+                world = map.Map('Island',
+                IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
+                if random.randint(1,3) > 1 and (x + y) % 2 == 0:
+                    world.map = IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o)
+                    world.draw_minimap()
+                    self.drape(world.minimap, (x * 160, y * 160))
+                else:
+                    noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
+                    rg = np.zeros(noise.shape, dtype=np.int8)
+                    rg.fill(25)
+                    bg = np.transpose(np.array([rg, rg, noise]))
+                    s = pygame.surfarray.make_surface(bg)
+                    self.drape(s, (x * 160, y* 160))
+                    if not shipPlaced:
+                        self.ship_pos = (x * 160 + 120, y * 160 + 20)
+                        shipPlaced = True
+                        
+        self.canvas = pygame.surfarray.array3d(self.gameArea.imageBuffer)
 
-if __name__ == '__main__':
+    def run(self):
+        self.init()
+        FPSCLOCK = pygame.time.Clock()
+        mousex = 0 # used to store x coordinate of mouse event
+        mousey = 0 # used to store y coordinate of mouse event
+                
+        while True: # main game loop
+            mouseClicked = False
+            self.plaster(self.canvas)
+            self.drape(self.ship_img, self.ship_pos)
+            
+            for event in pygame.event.get(): # event handling loop
+                if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == MOUSEMOTION:
+                    mousex, mousey = event.pos
+                elif event.type == MOUSEBUTTONUP:
+                    mousex, mousey = event.pos
+                    mouseClicked = True
+            
+            boxx, boxy = self.getBoxAtPixel(mousex, mousey)
+            if boxx != None and boxy != None:
+                self.drawHighlightBox(boxx, boxy, self.ship_pos, self.canvas)
+                # The mouse is currently over a box.
+                left, top = self.leftTopCoordsOfBox(boxx, boxy)
+                if self.isReachable(left, top, self.ship_pos, self.canvas) and mouseClicked:
+                        self.ship_pos = (left + 20, top + 20) # move the ship
+                        self.gameArea.repaint()
+            
+            # Redraw the screen and wait a clock tick.
+            self.repaint()
+            self.loop()
+            FPSCLOCK.tick(FPS)
+    
+    def isReachable(self, left, top, ship_pos, canvas):
+        slice = canvas[left:left+39,top:top+39, :-1]
+        destination = np.array([left, top])
+        current_location = np.array(ship_pos)
+        dist = np.linalg.norm(destination - current_location)
+        return dist < 100 and not (slice > 25).any()
+    
+    def drawHighlightBox(self, boxx, boxy, ship_pos, canvas):
+        left, top = self.leftTopCoordsOfBox(boxx, boxy)
+        if self.isReachable(left, top, ship_pos, canvas):
+            pygame.draw.rect(self.gameArea.imageBuffer, GREEN, (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
+        else:
+            pygame.draw.rect(self.gameArea.imageBuffer, HIGHLIGHTCOLOR, (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
+        return
+
+    def leftTopCoordsOfBox(self, boxx, boxy):
+        # Convert board coordinates to pixel coordinates
+        left = boxx * BOXSIZE + MARGIN
+        top = boxy * BOXSIZE + MARGIN
+        return (left, top) 
+
+    def getBoxAtPixel(self, x, y):
+        for boxx in range(BOARDWIDTH):
+            for boxy in range(BOARDHEIGHT):
+                left, top = self.leftTopCoordsOfBox(boxx, boxy)
+                boxRect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
+                if boxRect.collidepoint(x - 275, y - 10):
+                    return (boxx, boxy)
+        return (None, None)
+    
+    def get_render_area(self):
+        return self.gameArea.get_abs_rect()
+        
+    def get_canvas(self):
+        return pygame.surfarray.array3d(self.gameArea.imageBuffer)
+        
+    def drape(self, surf, pos):
+        self.gameArea.imageBuffer.blit(surf, pos)
+        
+    def plaster(self, canvas):
+        pygame.surfarray.blit_array(self.gameArea.imageBuffer, canvas)
+
+def main():
+    pygame.init()
     disp = pygame.display.set_mode((800,600))
+    pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
+
+    mousex = 0 # used to store x coordinate of mouse event
+    mousey = 0 # used to store y coordinate of mouse event
     
+    #canvas = gui.get_canvas()
+    
+    while True: # main game loop
+        mouseClicked = False
+        gui.plaster(canvas)
+        gui.drape(ship_img, ship_pos)
+        
+        for event in pygame.event.get(): # event handling loop
+            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == MOUSEMOTION:
+                mousex, mousey = event.pos
+            elif event.type == MOUSEBUTTONUP:
+                mousex, mousey = event.pos
+                mouseClicked = True
+
+        mousex -= gameArea.rect.x
+        mousy -= gameArea.rect.y
+        boxx, boxy = gui.getBoxAtPixel(mousex, mousey)
+        if boxx != None and boxy != None:
+            gui.drawHighlightBox(boxx, boxy, ship_pos, canvas)
+            # The mouse is currently over a box.
+            left, top = gui.leftTopCoordsOfBox(boxx, boxy)
+            if gui.isReachable(left, top, ship_pos, canvas) and mouseClicked:
+                    ship_pos = (left, top) # move the ship
+        
+        # Redraw the screen and wait a clock tick.
+        pygame.display.update()
+        pygame.display.flip()
+        FPSCLOCK.tick(FPS)
+
+if __name__ == '__main__':
+    main()  
     
