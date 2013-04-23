@@ -1,7 +1,3 @@
-"""<title>Containers and more Connections</title>
-A container is added, and centered a button within that
-container.
-"""
 import pygame
 import random, pygame, sys, os
 from pygame.locals import *
@@ -22,12 +18,11 @@ MOVESPTURN = 5
 SPICELIST = ["clove","cardomom","nutmeg","mace","anise","cinnamon","pepper","cumin","camphor","fennel"]
 RESOURCELIST = ["sago","rice","tempeh"]
 
-#
 spice_table = gui.List(width=150, height=100)
 score_table = gui.List(width=150, height=100)
 
-turns_label = gui.Label("0", 
-moves_label = gui.
+turns_label = gui.Label("0")
+moves_label = gui.Label("0") 
 
 FPS = 30 # frames per second, the general speed of the program
 WINDOWWIDTH = 640 # size of window's width in pixels
@@ -81,7 +76,7 @@ class InitDialog(gui.Dialog):
         okay_button = gui.Button("Okay")
         okay_button.connect(gui.CLICK,self.confirm)
         winit.td(okay_button) # TODO: continue button to setup game
-        winit.td(Quit())
+        #winit.td(Quit())
         
         gui.Dialog.__init__(self, title, winit)
         
@@ -126,7 +121,6 @@ class MainGui(gui.Desktop):
     game_area_w = 480
     game_area_h = 640
     game_area = None
-    menu_area = None
 
     def __init__(self, disp):
         gui.Desktop.__init__(self)
@@ -137,11 +131,11 @@ class MainGui(gui.Desktop):
         self.game_area = DrawingArea(self.game_area_w,
                                     self.game_area_h)
                                     
-        # Setup the gui area
-        self.menu_area = gui.Container(
-            width=disp.get_width()-self.game_area_w)
+        init_dialog = InitDialog()
+        # show initialize game dialog on startup
+        self.connect(gui.INIT, init_dialog.open, None)
         
-        sidebar = gui.Table(width=100, height=600)
+        sidebar = gui.Table(width=100, height=400)
         
         # row 1: name of ship
         sidebar.tr()
@@ -157,8 +151,11 @@ class MainGui(gui.Desktop):
         # row 3: turns left, moves left, and directional controls
         sidebar.tr()
         sidebar.td(gui.Label("Turns Left"))
+        sidebar.td(turns_label)
+        sidebar.tr()
         sidebar.td(gui.Label("Moves Left"))
-
+        sidebar.td(moves_label)
+        
         # row 4: score table
         sidebar.tr()
         sidebar.td(gui.Label("Scores"))
@@ -212,7 +209,8 @@ class MainGui(gui.Desktop):
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
-    
+        global NUMTURNS, MOVESPTURN
+        
         self.init()
         FPSCLOCK = pygame.time.Clock()
         mouse_x = 0 # used to store x coordinate of mouse event
@@ -233,19 +231,28 @@ class MainGui(gui.Desktop):
                     mouse_x, mouse_y = event.pos
                     mouse_clicked = True
             
-            boxx, boxy = self.get_box_at_pixel(mouse_x, mouse_y)
-            if boxx != None and boxy != None:
-                self.highlight_border(boxx, boxy, self.ship_pos, self.canvas)
+            box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
+            if box_x != None and box_y != None:
+                self.highlight_border(box_x, box_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
-                left, top = self.box_corner(boxx, boxy)
+                left, top = self.box_corner(box_x, box_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
                         self.ship_pos = (left, top) # move the ship
                         self.game_area.repaint()
                         
-                        spice_no = random.randint(0,9)
-                        spice_table.add(SPICELIST[spice_no])
-                        spice_table.resize()
-                        spice_table.repaint()
+                        # decrement number of turns
+                        NUMTURNS -= 1
+                        turns_label.set_text(str(NUMTURNS))
+                        turns_label.resize()
+                        turns_label.repaint()
+                        
+                        # decremenet number of moves
+                        
+                        if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
+                            spice_no = random.randint(0,9)
+                            spice_table.add(SPICELIST[spice_no])
+                            spice_table.resize()
+                            spice_table.repaint()
             
             # Redraw the screen and wait a clock tick.
             self.repaint()
@@ -253,20 +260,31 @@ class MainGui(gui.Desktop):
             FPSCLOCK.tick(FPS)
     
     def is_reachable(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top+30:top+39, :-1]
+        slice = canvas[left:left+39,top:top+39, :-1]
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
         dist = np.linalg.norm(destination - current_location)
-        return not (slice > 25).all()
-        
-    def is_island(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top:top+39, :-1]
-        return (slice > 25).any()
+        return dist < 100 and not self.is_island(slice)
     
-    def highlight_border(self, boxx, boxy, ship_pos, canvas):
-        left, top = self.box_corner(boxx, boxy)
+    def is_island(self, slice):
+        return np.sum(slice != 25) > np.size(slice) / 2
+    
+    def near_island(self, x, y, ship_pos, canvas):
+        island = False
+        for box_x in range(max(0, x-1), min(BOARDWIDTH, x + 2)):
+            for box_y in range(max(0, y-1), min(BOARDHEIGHT, y + 2)):
+                if (box_x == x or box_y == y) :
+                    (left, top) = self.box_corner(box_x, box_y)
+                    slice = canvas[left:left+39,top:top+39, :-1]
+                    if self.is_island(slice):
+                        island = True
+        
+        return island
+    
+    def highlight_border(self, box_x, box_y, ship_pos, canvas):
+        left, top = self.box_corner(box_x, box_y)
         if self.is_reachable(left, top, ship_pos, canvas):
-            if self.is_island(left, top, ship_pos, canvas):
+            if self.near_island(box_x, box_y, ship_pos, canvas):
                 color = GREEN
             else:
                 color = YELLOW
@@ -277,19 +295,19 @@ class MainGui(gui.Desktop):
                 (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
         return
 
-    def box_corner(self, boxx, boxy):
+    def box_corner(self, box_x, box_y):
         # Convert board coordinates to pixel coordinates
-        left = boxx * BOXSIZE + MARGIN
-        top = boxy * BOXSIZE + MARGIN
+        left = box_x * BOXSIZE + MARGIN
+        top = box_y * BOXSIZE + MARGIN
         return (left, top) 
 
     def get_box_at_pixel(self, x, y):
-        for boxx in range(BOARDWIDTH):
-            for boxy in range(BOARDHEIGHT):
-                left, top = self.box_corner(boxx, boxy)
+        for box_x in range(BOARDWIDTH):
+            for box_y in range(BOARDHEIGHT):
+                left, top = self.box_corner(box_x, box_y)
                 box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
                 if box_rect.collidepoint(x - 275, y - 10):
-                    return (boxx, boxy)
+                    return (box_x, box_y)
         return (None, None)
     
     def get_render_area(self):
@@ -306,7 +324,7 @@ class MainGui(gui.Desktop):
 
 def main():
     pygame.init()
-    disp = pygame.display.set_mode((800,600))
+    disp = pygame.display.set_mode((800,480))
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
