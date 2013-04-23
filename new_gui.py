@@ -5,31 +5,19 @@ import map
 from perlin_noise import *
 from island_generator import *
 import numpy as np
-
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
 from pgu import gui # TODO: figure out how to install pgu
 
+# GUI debugging mode: do not generate map
+gui_debug = True
+
 # global variable settings
 SHIPNAME = "SANTA MARIA"
 NUMTURNS = 30
-MOVESPTURN = 5
+MOVESPTURN = 3
 
-SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
-        "cinnamon","pepper","cumin","camphor","fennel"]
-RESOURCELIST = ["sago","rice","tempeh"]
-ISLANDNAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
-        "Bali","Singapore","Borneo", "Hawaii", "Madagascar", "Malabar", 
-        "Andaman", "Nicobar", "Trinidad", "Tobago", "Cuba", "Atlantis",
-        "Iceland", "Greenland", "Antarctica", "Australia", "Tasmania", 
-        "New Zealand", "Tahiti"]
-
-spice_table = gui.List(width=150, height=100)
-score_table = gui.List(width=150, height=100)
-
-turns_label = gui.Label(str(NUMTURNS))
-moves_label = gui.Label("0")
-
+# Graphical Parameters for Game Map
 FPS = 30 # frames per second, the general speed of the program
 WINDOWWIDTH = 640 # size of window's width in pixels
 WINDOWHEIGHT = 480 # size of windows' height in pixels
@@ -39,13 +27,46 @@ BGCOLOR_LEVEL = 25
 ISLANDSIZE = 4 * BOXSIZE # size of island bounding box height & width in pixels
 BOARDWIDTH = (WINDOWWIDTH - 2 * MARGIN) / BOXSIZE # number of columns of icons
 BOARDHEIGHT = (WINDOWHEIGHT - 2 * MARGIN) / BOXSIZE # number of rows of icons
-
 # COLORS
 # NAME     (   R,   G,   B)
 OCEAN    = (  25, 135, 255)
 GREEN    = (   0, 255,  85)
 RED      = ( 255,   0,   0)
 YELLOW   = ( 255, 255,  0)
+
+# proper nouns
+SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
+        "cinnamon","pepper","cumin","camphor","fennel"]
+RESOURCELIST = ["sago","rice","tempeh"]
+ISLANDNAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
+        "Bali","Singapore","Borneo", "Hawaii", "Madagascar", "Malabar", 
+        "Andaman", "Nicobar", "Trinidad", "Tobago", "Cuba", "Atlantis",
+        "Iceland", "Greenland", "Antarctica", "Australia", "Tasmania", 
+        "New Zealand", "Tahiti"]
+        
+# GUI Elements that need to be updated
+spice_table = gui.List(width=150, height=100)
+score_table = gui.List(width=150, height=100)
+turns_label = gui.Label(str(NUMTURNS))
+moves_label = gui.Label(str(MOVESPTURN))
+
+# Variables that keep track of the state of the game
+dialog_on = False
+moves_left = MOVESPTURN
+spices_collected = []
+winning_spices = ["clove"]
+
+# Helper functions for updating labels and lists
+def update_table(element, string):
+    element.add(string)
+    element.resize()
+    element.repaint()
+    
+# Helper function for updating labels and lists
+def update_label(element, string):
+    element.set_text(string)
+    element.resize()
+    element.repaint()
 
 # initial setup tbl
 class InitDialog(gui.Dialog):
@@ -133,7 +154,7 @@ class MainGui(gui.Desktop):
         self.game_area = DrawingArea(self.game_area_w,
                                     self.game_area_h)
                                     
-        sidebar = gui.Table(width=100, height=400, valign = -1)
+        sidebar = gui.Table(width=100, height=400, valign = 1)
         
         # row 1: name of ship
         sidebar.tr()
@@ -151,14 +172,22 @@ class MainGui(gui.Desktop):
         sidebar.td(gui.Label("Turns Left"))
         sidebar.td(turns_label)
         sidebar.tr()
-        #sidebar.td(gui.Label("Moves Left"))
-        #sidebar.td(moves_label)
+        sidebar.td(gui.Label("Moves Left"))
+        sidebar.td(moves_label)
+        
+        help_button = gui.Button("Help")
+        help_button.connect(gui.CLICK, update_table(spice_table, "Clicked"), None)
+        sidebar.td(help_button)
 
         # row 4: score table
         sidebar.tr()
         sidebar.td(gui.Label("Islands Visited"))
         sidebar.tr()
         sidebar.td(score_table, align=-1, valign=-1)
+        
+        #sidebar.tr()
+        
+        
         
         # set up the overall layout
         tbl = gui.Table(height=disp.get_height())
@@ -209,14 +238,15 @@ class MainGui(gui.Desktop):
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
-        global NUMTURNS, last_island_visited
+        global NUMTURNS, moves_left, last_island_visited
         
         self.init()
         FPSCLOCK = pygame.time.Clock()
         mouse_x = 0 # used to store x coordinate of mouse event
         mouse_y = 0 # used to store y coordinate of mouse event
                 
-        while True: # main game loop
+        # only run main game loop when there is no dialog
+        while True and not dialog_on:
             mouse_clicked = False
             self.plaster(self.canvas)
             self.drape(self.ship_img, self.ship_pos)
@@ -231,8 +261,11 @@ class MainGui(gui.Desktop):
                     mouse_x, mouse_y = event.pos
                     mouse_clicked = True
             
-            box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
-            if box_x != None and box_y != None:
+            # only get map position if we clicked inside map
+            if mouse_x > 100:
+                box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
+            
+            if box_x != None and box_y != None and NUMTURNS > 0:
                 self.highlight_border(box_x, box_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
                 left, top = self.box_corner(box_x, box_y)
@@ -240,12 +273,17 @@ class MainGui(gui.Desktop):
                         self.ship_pos = (left, top) # move the ship
                         self.game_area.repaint()
                         
-                        # decrement number of turns
-                        NUMTURNS -= 1
-                        turns_label.set_text(str(NUMTURNS))
-                        turns_label.resize()
-                        turns_label.repaint()
+                        # decrement number of moves
+                        moves_left-=1
                         
+                        # decrement number of turns
+                        if moves_left == 0:
+                            moves_left = MOVESPTURN
+                            NUMTURNS-=1
+                            update_label(turns_label, str(NUMTURNS))
+                        
+                        update_label(moves_label, str(moves_left))
+
                         if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
                             nearby = self.islands_at(box_x, box_y)
                             for island in nearby:
@@ -253,28 +291,32 @@ class MainGui(gui.Desktop):
                                 visited = info[0]
                                 island_rect = info[1]
                                 if not visited:
-                                    score_table.add(island)
-                                    score_table.resize()
-                                    score_table.repaint()
+                                    update_table(score_table, island)
                                     
                                     spice_no = random.randint(0,9)
-                                    spice_table.add(SPICELIST[spice_no])
-                                    spice_table.resize()
-                                    spice_table.repaint()
+                                    thespice = SPICELIST[spice_no]
+                                    spices_collected.append(thespice)
+                                    update_table(spice_table, thespice)
                                     # Mark as visited
                                     self.islands[island] = (True, island_rect)
+                                    
+                                    if set(spices_collected).issubset(set(winning_spices)):
+                                        update_table(score_table, "You Won!")
             
             # Redraw the screen and wait a clock tick.
             self.repaint()
             self.loop()
             FPSCLOCK.tick(FPS)
     
-    def is_reachable(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top:top+39, :-1]
+    def block_distance(self, left, top, ship_pos, canvas):
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
-        dist = np.linalg.norm(destination - current_location)
-        return dist < 100 and not self.is_island(slice)
+        return np.linalg.norm(destination - current_location)
+    
+    def is_reachable(self, left, top, ship_pos, canvas):
+        slice = canvas[left:left+39,top:top+39, :-1]
+        dist = self.block_distance(left, top, ship_pos, canvas)
+        return dist < moves_left*25 and not self.is_island(slice)
     
     def is_island(self, slice):
         return np.sum(slice != BGCOLOR_LEVEL) > 3 * np.size(slice) / 8
