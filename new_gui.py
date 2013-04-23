@@ -233,20 +233,30 @@ class MainGui(gui.Desktop):
             FPSCLOCK.tick(FPS)
     
     def is_reachable(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top+30:top+39, :-1]
+        slice = canvas[left:left+39,top:top+39, :-1]
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
         dist = np.linalg.norm(destination - current_location)
-        return not (slice > 25).all()
-        
-    def is_island(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top:top+39, :-1]
-        return (slice > 25).any()
+        return dist < 100 and not self.is_island(slice)
     
-    def highlight_border(self, boxx, boxy, ship_pos, canvas):
-        left, top = self.box_corner(boxx, boxy)
+    def is_island(self, slice):
+        return np.sum(slice != 25) > 2 * np.size(slice) / 3
+    
+    def near_island(self, x, y, ship_pos, canvas):
+        island = False
+        for box_x in range(max(0, x-1), min(BOARDWIDTH, x + 2)):
+            for box_y in range(max(0, y-1), min(BOARDHEIGHT, y + 2)):
+                (left, top) = self.box_corner(box_x, box_y)
+                slice = canvas[left:left+39,top:top+39, :-1]
+                if self.is_island(slice):
+                    island = True
+        
+        return island
+    
+    def highlight_border(self, box_x, box_y, ship_pos, canvas):
+        left, top = self.box_corner(box_x, box_y)
         if self.is_reachable(left, top, ship_pos, canvas):
-            if self.is_island(left, top, ship_pos, canvas):
+            if self.near_island(box_x, box_y, ship_pos, canvas):
                 color = GREEN
             else:
                 color = YELLOW
@@ -257,19 +267,19 @@ class MainGui(gui.Desktop):
                 (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
         return
 
-    def box_corner(self, boxx, boxy):
+    def box_corner(self, box_x, box_y):
         # Convert board coordinates to pixel coordinates
-        left = boxx * BOXSIZE + MARGIN
-        top = boxy * BOXSIZE + MARGIN
+        left = box_x * BOXSIZE + MARGIN
+        top = box_y * BOXSIZE + MARGIN
         return (left, top) 
 
     def get_box_at_pixel(self, x, y):
-        for boxx in range(BOARDWIDTH):
-            for boxy in range(BOARDHEIGHT):
-                left, top = self.box_corner(boxx, boxy)
+        for box_x in range(BOARDWIDTH):
+            for box_y in range(BOARDHEIGHT):
+                left, top = self.box_corner(box_x, box_y)
                 box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
                 if box_rect.collidepoint(x - 275, y - 10):
-                    return (boxx, boxy)
+                    return (box_x, box_y)
         return (None, None)
     
     def get_render_area(self):
