@@ -15,14 +15,9 @@ SHIPNAME = "SANTA MARIA"
 NUMTURNS = 30
 MOVESPTURN = 5
 
-SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
-        "cinnamon","pepper","cumin","camphor","fennel"]
+SPICELIST = ["clove","cardomom","nutmeg","mace","anise","cinnamon","pepper","cumin","camphor","fennel"]
 RESOURCELIST = ["sago","rice","tempeh"]
-ISLANDNAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
-        "Bali","Singapore","Borneo", "Hawaii", "Madagascar", "Malabar", 
-        "Andaman", "Nicobar", "Trinidad", "Tobago", "Cuba", "Atlantis",
-        "Iceland", "Greenland", "Antarctica", "Australia", "Tasmania", 
-        "New Zealand", "Tahiti"]
+ISLANDNAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea","Bali","Singapore","Borneo"]
 
 spice_table = gui.List(width=150, height=100)
 score_table = gui.List(width=150, height=100)
@@ -30,11 +25,13 @@ score_table = gui.List(width=150, height=100)
 turns_label = gui.Label(str(NUMTURNS))
 moves_label = gui.Label("0")
 
+last_island_visited = ""
+
 FPS = 30 # frames per second, the general speed of the program
 WINDOWWIDTH = 640 # size of window's width in pixels
 WINDOWHEIGHT = 480 # size of windows' height in pixels
 MARGIN = 20
-BOXSIZE = 20 # size of box height & width in pixels
+BOXSIZE = 40 # size of box height & width in pixels
 BGCOLOR_LEVEL = 25
 ISLANDSIZE = 4 * BOXSIZE # size of island bounding box height & width in pixels
 BOARDWIDTH = (WINDOWWIDTH - 2 * MARGIN) / BOXSIZE # number of columns of icons
@@ -119,6 +116,12 @@ class DrawingArea(gui.Widget):
         # Paint whatever has been captured in the buffer
         surf.blit(self.image_buffer, (0, 0))
         
+    # Call self function to take a snapshot of whatever has been rendered
+    # onto the display over self widget.
+    def save_background(self):
+        disp = pygame.display.get_surface()
+        self.image_buffer.blit(disp, self.get_abs_rect())
+        
 class MainGui(gui.Desktop):
     game_area_w = 480
     game_area_h = 640
@@ -167,20 +170,20 @@ class MainGui(gui.Desktop):
         
         self.init(tbl, disp)
 
-        noise_w = ISLANDSIZE
-        noise_h = ISLANDSIZE
-        noise_f = 1.5
-        noise_o = 3
+        noise_w = 40
+        noise_h = 40
+        noise_f = 1
+        noise_o = 5
         
         p = PerlinNoiseGenerator()
         
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
-        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (BOXSIZE, BOXSIZE))
+        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (40, 40))
         
         ship_placed = False
         self.ship_pos = None
         
-        noise = np.array(p.generate_noise(noise_w,noise_h,noise_f, noise_o))
+        noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
         rg = np.zeros(noise.shape, dtype=np.int8)
         rg.fill(25)
         bg = np.transpose(np.array([rg, rg, noise]))
@@ -189,12 +192,13 @@ class MainGui(gui.Desktop):
         self.islands = {}
         num_islands = 0
         
-        for x in range(WINDOWWIDTH / ISLANDSIZE):
-            for y in range(WINDOWHEIGHT / ISLANDSIZE):
+        for x in range(4):
+            for y in range(3):
                 (left, top) = (x * ISLANDSIZE, y * ISLANDSIZE)
+                world = map.Map('Island',
+                IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
                 if random.randint(1,3) > 1 and (x + y) % 2 == 0:
-                    world = map.Map('Island', 
-                        IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
+                    world.map = IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o)
                     world.draw_minimap()
                     self.drape(world.minimap, (left, top))
                     island_rect = pygame.Rect(left, top, ISLANDSIZE, ISLANDSIZE)
@@ -210,7 +214,7 @@ class MainGui(gui.Desktop):
 
     def run(self):
         global NUMTURNS, last_island_visited
-        
+    
         self.init()
         FPSCLOCK = pygame.time.Clock()
         mouse_x = 0 # used to store x coordinate of mouse event
@@ -253,6 +257,8 @@ class MainGui(gui.Desktop):
                                 visited = info[0]
                                 island_rect = info[1]
                                 if not visited:
+                                    #last_island_visited = island
+                                    
                                     score_table.add(island)
                                     score_table.resize()
                                     score_table.repaint()
@@ -277,7 +283,7 @@ class MainGui(gui.Desktop):
         return dist < 100 and not self.is_island(slice)
     
     def is_island(self, slice):
-        return np.sum(slice != BGCOLOR_LEVEL) > 3 * np.size(slice) / 8
+        return np.sum(slice != BGCOLOR_LEVEL) > np.size(slice) / 2
     
     def near_island(self, x, y, ship_pos, canvas):
         island = False
@@ -321,12 +327,11 @@ class MainGui(gui.Desktop):
         return (left, top) 
 
     def get_box_at_pixel(self, x, y):
-        screen_rect = self.get_render_area()
         for box_x in range(BOARDWIDTH):
             for box_y in range(BOARDHEIGHT):
                 left, top = self.box_corner(box_x, box_y)
                 box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
-                if box_rect.collidepoint(x - screen_rect.x, y - screen_rect.y):
+                if box_rect.collidepoint(x - 275, y - 10):
                     return (box_x, box_y)
         return (None, None)
     

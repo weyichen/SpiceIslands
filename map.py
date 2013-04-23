@@ -11,7 +11,7 @@ class Map:
         self.map = map
         self.width = len(self.map[0])
         self.height = len(self.map)
-        self.tile_size = 4
+        self.tile_size = 1
 
         self.waterline = 0
         
