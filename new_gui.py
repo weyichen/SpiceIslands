@@ -1,7 +1,3 @@
-"""<title>Containers and more Connections</title>
-A container is added, and centered a button within that
-container.
-"""
 import pygame
 import random, pygame, sys, os
 from pygame.locals import *
@@ -18,6 +14,15 @@ from pgu import gui # TODO: figure out how to install pgu
 SHIPNAME = "SANTA MARIA"
 NUMTURNS = 30
 MOVESPTURN = 5
+
+SPICELIST = ["clove","cardomom","nutmeg","mace","anise","cinnamon","pepper","cumin","camphor","fennel"]
+RESOURCELIST = ["sago","rice","tempeh"]
+
+spice_table = gui.List(width=150, height=100)
+score_table = gui.List(width=150, height=100)
+
+turns_label = gui.Label("0")
+moves_label = gui.Label("0") 
 
 FPS = 30 # frames per second, the general speed of the program
 WINDOWWIDTH = 640 # size of window's width in pixels
@@ -116,7 +121,6 @@ class MainGui(gui.Desktop):
     game_area_w = 480
     game_area_h = 640
     game_area = None
-    menu_area = None
 
     def __init__(self, disp):
         gui.Desktop.__init__(self)
@@ -127,25 +131,20 @@ class MainGui(gui.Desktop):
         self.game_area = DrawingArea(self.game_area_w,
                                     self.game_area_h)
                                     
-        # Setup the gui area
-        self.menu_area = gui.Container(
-            width=disp.get_width()-self.game_area_w)
+
         
-        tbl = gui.Table(height=disp.get_height())
+        sidebar = gui.Table(width=100, height=400)
         
         # row 1: name of ship
-        tbl.tr()
+        sidebar.tr()
         name_label = gui.Label(SHIPNAME)
-        tbl.td(name_label)
-        
-        # row 2: sidebar and map tbl
-        tbl.tr()
-        # column 1 : sidebar
-        sidebar = gui.Table(width=100, height=600)
+        sidebar.td(name_label)
         
         # sidebar row 1: spices and resources table
         sidebar.tr()
         sidebar.td(gui.Label("Spices & Resources"))
+        sidebar.tr()
+        sidebar.td(spice_table, align=-1, valign=-1)
 
         # row 3: turns left, moves left, and directional controls
         sidebar.tr()
@@ -155,10 +154,12 @@ class MainGui(gui.Desktop):
         # row 4: score table
         sidebar.tr()
         sidebar.td(gui.Label("Scores"))
+        sidebar.tr()
+        sidebar.td(score_table, align=-1, valign=-1)
         
+        # set up the overall layout
+        tbl = gui.Table(height=disp.get_height())
         tbl.td(sidebar)
-
-        # column 2 : map tbl
         tbl.td(self.game_area)
         
         self.init(tbl, disp)
@@ -185,10 +186,15 @@ class MainGui(gui.Desktop):
                     world.draw_minimap()
                     self.drape(world.minimap, (x * 160, y * 160))
                 else:
-                    noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
-                    rg = np.zeros(noise.shape, dtype=np.int8)
+                    #noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
+                    
+                    # faster without noising
+                    blue = np.zeros((noise_w, noise_h), dtype=np.int8)
+                    blue.fill(OCEAN[2])
+                    
+                    rg = np.zeros(blue.shape, dtype=np.int8)
                     rg.fill(25)
-                    bg = np.transpose(np.array([rg, rg, noise]))
+                    bg = np.transpose(np.array([rg, rg, blue]))
                     s = pygame.surfarray.make_surface(bg)
                     self.drape(s, (x * 160, y* 160))
                     if not ship_placed:
@@ -218,14 +224,20 @@ class MainGui(gui.Desktop):
                     mouse_x, mouse_y = event.pos
                     mouse_clicked = True
             
-            boxx, boxy = self.get_box_at_pixel(mouse_x, mouse_y)
-            if boxx != None and boxy != None:
-                self.highlight_border(boxx, boxy, self.ship_pos, self.canvas)
+            box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
+            if box_x != None and box_y != None:
+                self.highlight_border(box_x, box_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
-                left, top = self.box_corner(boxx, boxy)
+                left, top = self.box_corner(box_x, box_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
                         self.ship_pos = (left, top) # move the ship
                         self.game_area.repaint()
+                        
+                        if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
+                            spice_no = random.randint(0,9)
+                            spice_table.add(SPICELIST[spice_no])
+                            spice_table.resize()
+                            spice_table.repaint()
             
             # Redraw the screen and wait a clock tick.
             self.repaint()
@@ -240,16 +252,17 @@ class MainGui(gui.Desktop):
         return dist < 100 and not self.is_island(slice)
     
     def is_island(self, slice):
-        return np.sum(slice != 25) > 2 * np.size(slice) / 3
+        return np.sum(slice != 25) > np.size(slice) / 2
     
     def near_island(self, x, y, ship_pos, canvas):
         island = False
         for box_x in range(max(0, x-1), min(BOARDWIDTH, x + 2)):
             for box_y in range(max(0, y-1), min(BOARDHEIGHT, y + 2)):
-                (left, top) = self.box_corner(box_x, box_y)
-                slice = canvas[left:left+39,top:top+39, :-1]
-                if self.is_island(slice):
-                    island = True
+                if (box_x == x or box_y == y) :
+                    (left, top) = self.box_corner(box_x, box_y)
+                    slice = canvas[left:left+39,top:top+39, :-1]
+                    if self.is_island(slice):
+                        island = True
         
         return island
     
@@ -296,7 +309,7 @@ class MainGui(gui.Desktop):
 
 def main():
     pygame.init()
-    disp = pygame.display.set_mode((800,600))
+    disp = pygame.display.set_mode((800,480))
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
