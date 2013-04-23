@@ -15,7 +15,7 @@ SHIPNAME = "SANTA MARIA"
 NUMTURNS = 30
 MOVESPTURN = 5
 
-# initial setup window
+# initial setup tbl
 class InitDialog(gui.Dialog):
     def __init__(self,**params):
         title = gui.Label("Initial Game Options")
@@ -72,14 +72,7 @@ class InitDialog(gui.Dialog):
         MOVESPTURN = self.move_Input.value
         self.send(gui.CHANGE)
 
-# subclassed gui.button is a fully featured Quit button
-class Quit(gui.Button):
-    def __init__(self,**params):
-        params['value'] = 'Quit'
-        gui.Button.__init__(self,**params)
-        self.connect(gui.CLICK,app.quit,None)
-
-# code for organizing window is like a HTML table
+# code for organizing tbl is like a HTML table
 # using the tr and td methods
 # td method adds elements to container by placing it in a subcontainer, so that it will not fill the whole cell
 
@@ -101,7 +94,7 @@ class DrawingArea(gui.Widget):
         this.imageBuffer.blit(disp, this.get_abs_rect())
         
 class MainGui(gui.Desktop):
-    gameAreaHeight = 500
+    gameAreaWidth = 500
     gameArea = None
     menuArea = None
 
@@ -109,37 +102,21 @@ class MainGui(gui.Desktop):
         gui.Desktop.__init__(this)
 
         # Setup the 'game' area where the action takes place
-        this.gameArea = DrawingArea(disp.get_width(),
-                                    this.gameAreaHeight)
+        this.gameArea = DrawingArea(this.gameAreaWidth,
+                                    disp.get_height())
         # Setup the gui area
         this.menuArea = gui.Container(
-            height=disp.get_height()-this.gameAreaHeight)
+            width=disp.get_width()-this.gameAreaWidth)
         
-        app.connect(gui.QUIT,app.quit,None) # enables quitting using 'x' button
+        tbl = gui.Table(height=disp.get_height())
         
-        # use a container as a table
-        window = gui.Table(width=800,height=600)
-
-        init_dialog = InitDialog()
-        
-        # show initialize game dialog on startup
-        app.connect(gui.INIT, init_dialog.open, None)
-
-        # init_dialog CHANGE event is connected to this function
-        def onchange(value):
-            print(SHIPNAME)
-            app.repaintall()
-            value.close()
-            
-        init_dialog.connect(gui.CHANGE, onchange, init_dialog)
-
         # row 1: name of ship
-        window.tr()
+        tbl.tr()
         name_label = gui.Label(SHIPNAME)
-        window.td(name_label)
+        tbl.td(name_label)
         
-        # row 2: sidebar and map window
-        window.tr()
+        # row 2: sidebar and map tbl
+        tbl.tr()
         # column 1 : sidebar
         sidebar = gui.Table(width=100, height=600)
         
@@ -151,22 +128,22 @@ class MainGui(gui.Desktop):
         sidebar.tr()
         sidebar.td(gui.Label("Turns Left"))
         sidebar.td(gui.Label("Moves Left"))
-        sidebar.td(Quit())
 
         # row 4: score table
         sidebar.tr()
         sidebar.td(gui.Label("Scores"))
         
-        window.td(sidebar)
+        tbl.td(sidebar)
 
-        # column 2 : map window
-        window.td(gui.Label("Game Map"))
+        # column 2 : map tbl
+        tbl.td(this.gameArea)
+        
+        this.init(tbl, disp)
+
 
 if __name__ == '__main__':
-    
-
- 
-    
-    app.run(window)
+    disp = pygame.display.set_mode((800,600))
+    gui = MainGui(disp)
+    gui.run()
     
     

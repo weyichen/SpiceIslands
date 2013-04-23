@@ -94,7 +94,7 @@ def main():
                 DISPLAYSURF.blit(world.minimap, (x * 160, y * 160))
             else:
                 noise = np.array(p.generate_noise(4*noise_w,4*noise_h,noise_f, noise_o))
-                rg = np.zeros(noise.shape)
+                rg = np.zeros(noise.shape, dtype=np.int8)
                 rg.fill(25)
                 bg = np.transpose(np.array([rg, rg, noise]))
                 s = pygame.surfarray.make_surface(bg)
