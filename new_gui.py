@@ -29,14 +29,10 @@ BOARDHEIGHT = (WINDOWHEIGHT - 2 * MARGIN) / BOXSIZE # number of rows of icons
 
 # COLORS
 # NAME     (   R,   G,   B)
-NAVYBLUE = (  60,  60, 100)
 OCEAN    = (  25, 135, 255)
 GREEN    = (   0, 255,  85)
 RED      = ( 255,   0,   0)
-
-BGCOLOR = OCEAN
-BOXCOLOR = GREEN
-HIGHLIGHTCOLOR = RED
+YELLOW   = ( 255, 255,  0)
 
 # initial setup tbl
 class InitDialog(gui.Dialog):
@@ -104,23 +100,23 @@ class InitDialog(gui.Dialog):
 class DrawingArea(gui.Widget):
     def __init__(self, width, height):
         gui.Widget.__init__(self, width=width, height=height)
-        self.imageBuffer = pygame.Surface((width, height))
+        self.image_buffer = pygame.Surface((width, height))
 
     def paint(self, surf):
         # Paint whatever has been captured in the buffer
-        surf.blit(self.imageBuffer, (0, 0))
+        surf.blit(self.image_buffer, (0, 0))
         
     # Call self function to take a snapshot of whatever has been rendered
     # onto the display over self widget.
     def save_background(self):
         disp = pygame.display.get_surface()
-        self.imageBuffer.blit(disp, self.get_abs_rect())
+        self.image_buffer.blit(disp, self.get_abs_rect())
         
 class MainGui(gui.Desktop):
-    gameAreaWidth = 480
-    gameAreaHeight = 640
-    gameArea = None
-    menuArea = None
+    game_area_w = 480
+    game_area_h = 640
+    game_area = None
+    menu_area = None
 
     def __init__(self, disp):
         gui.Desktop.__init__(self)
@@ -128,12 +124,12 @@ class MainGui(gui.Desktop):
         self.connect(gui.QUIT, self.quit, None)
 
         # Setup the 'game' area where the action takes place
-        self.gameArea = DrawingArea(self.gameAreaWidth,
-                                    self.gameAreaHeight)
+        self.game_area = DrawingArea(self.game_area_w,
+                                    self.game_area_h)
                                     
         # Setup the gui area
-        self.menuArea = gui.Container(
-            width=disp.get_width()-self.gameAreaWidth)
+        self.menu_area = gui.Container(
+            width=disp.get_width()-self.game_area_w)
         
         tbl = gui.Table(height=disp.get_height())
         
@@ -163,7 +159,7 @@ class MainGui(gui.Desktop):
         tbl.td(sidebar)
 
         # column 2 : map tbl
-        tbl.td(self.gameArea)
+        tbl.td(self.game_area)
         
         self.init(tbl, disp)
 
@@ -177,7 +173,7 @@ class MainGui(gui.Desktop):
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
         self.ship_img = pygame.transform.smoothscale(raw_ship_img, (40, 40))
         
-        shipPlaced = False
+        ship_placed = False
         self.ship_pos = None
         
         for x in range(4):
@@ -195,20 +191,20 @@ class MainGui(gui.Desktop):
                     bg = np.transpose(np.array([rg, rg, noise]))
                     s = pygame.surfarray.make_surface(bg)
                     self.drape(s, (x * 160, y* 160))
-                    if not shipPlaced:
-                        self.ship_pos = (x * 160 + 120, y * 160 + 20)
-                        shipPlaced = True
+                    if not ship_placed:
+                        self.ship_pos = (x * 160 + 20, y * 160 + 20)
+                        ship_placed = True
                         
-        self.canvas = pygame.surfarray.array3d(self.gameArea.imageBuffer)
+        self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
         self.init()
         FPSCLOCK = pygame.time.Clock()
-        mousex = 0 # used to store x coordinate of mouse event
-        mousey = 0 # used to store y coordinate of mouse event
+        mouse_x = 0 # used to store x coordinate of mouse event
+        mouse_y = 0 # used to store y coordinate of mouse event
                 
         while True: # main game loop
-            mouseClicked = False
+            mouse_clicked = False
             self.plaster(self.canvas)
             self.drape(self.ship_img, self.ship_pos)
             
@@ -217,66 +213,76 @@ class MainGui(gui.Desktop):
                     pygame.quit()
                     sys.exit()
                 elif event.type == MOUSEMOTION:
-                    mousex, mousey = event.pos
+                    mouse_x, mouse_y = event.pos
                 elif event.type == MOUSEBUTTONUP:
-                    mousex, mousey = event.pos
-                    mouseClicked = True
+                    mouse_x, mouse_y = event.pos
+                    mouse_clicked = True
             
-            boxx, boxy = self.getBoxAtPixel(mousex, mousey)
+            boxx, boxy = self.get_box_at_pixel(mouse_x, mouse_y)
             if boxx != None and boxy != None:
-                self.drawHighlightBox(boxx, boxy, self.ship_pos, self.canvas)
+                self.highlight_border(boxx, boxy, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
-                left, top = self.leftTopCoordsOfBox(boxx, boxy)
-                if self.isReachable(left, top, self.ship_pos, self.canvas) and mouseClicked:
-                        self.ship_pos = (left + 20, top + 20) # move the ship
-                        self.gameArea.repaint()
+                left, top = self.box_corner(boxx, boxy)
+                if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
+                        self.ship_pos = (left, top) # move the ship
+                        self.game_area.repaint()
             
             # Redraw the screen and wait a clock tick.
             self.repaint()
             self.loop()
             FPSCLOCK.tick(FPS)
     
-    def isReachable(self, left, top, ship_pos, canvas):
-        slice = canvas[left:left+39,top:top+39, :-1]
+    def is_reachable(self, left, top, ship_pos, canvas):
+        slice = canvas[left:left+39,top+30:top+39, :-1]
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
         dist = np.linalg.norm(destination - current_location)
-        return dist < 100 and not (slice > 25).any()
+        return not (slice > 25).all()
+        
+    def is_island(self, left, top, ship_pos, canvas):
+        slice = canvas[left:left+39,top:top+39, :-1]
+        return (slice > 25).any()
     
-    def drawHighlightBox(self, boxx, boxy, ship_pos, canvas):
-        left, top = self.leftTopCoordsOfBox(boxx, boxy)
-        if self.isReachable(left, top, ship_pos, canvas):
-            pygame.draw.rect(self.gameArea.imageBuffer, GREEN, (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
+    def highlight_border(self, boxx, boxy, ship_pos, canvas):
+        left, top = self.box_corner(boxx, boxy)
+        if self.is_reachable(left, top, ship_pos, canvas):
+            if self.is_island(left, top, ship_pos, canvas):
+                color = GREEN
+            else:
+                color = YELLOW
         else:
-            pygame.draw.rect(self.gameArea.imageBuffer, HIGHLIGHTCOLOR, (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
+            color = RED
+        
+        pygame.draw.rect(self.game_area.image_buffer, color, 
+                (left - 5, top - 5, BOXSIZE + 10, BOXSIZE + 10), 4)
         return
 
-    def leftTopCoordsOfBox(self, boxx, boxy):
+    def box_corner(self, boxx, boxy):
         # Convert board coordinates to pixel coordinates
         left = boxx * BOXSIZE + MARGIN
         top = boxy * BOXSIZE + MARGIN
         return (left, top) 
 
-    def getBoxAtPixel(self, x, y):
+    def get_box_at_pixel(self, x, y):
         for boxx in range(BOARDWIDTH):
             for boxy in range(BOARDHEIGHT):
-                left, top = self.leftTopCoordsOfBox(boxx, boxy)
-                boxRect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
-                if boxRect.collidepoint(x - 275, y - 10):
+                left, top = self.box_corner(boxx, boxy)
+                box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
+                if box_rect.collidepoint(x - 275, y - 10):
                     return (boxx, boxy)
         return (None, None)
     
     def get_render_area(self):
-        return self.gameArea.get_abs_rect()
+        return self.game_area.get_abs_rect()
         
     def get_canvas(self):
-        return pygame.surfarray.array3d(self.gameArea.imageBuffer)
+        return pygame.surfarray.array3d(self.game_area.image_buffer)
         
     def drape(self, surf, pos):
-        self.gameArea.imageBuffer.blit(surf, pos)
+        self.game_area.image_buffer.blit(surf, pos)
         
     def plaster(self, canvas):
-        pygame.surfarray.blit_array(self.gameArea.imageBuffer, canvas)
+        pygame.surfarray.blit_array(self.game_area.image_buffer, canvas)
 
 def main():
     pygame.init()
@@ -284,41 +290,6 @@ def main():
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
-
-    mousex = 0 # used to store x coordinate of mouse event
-    mousey = 0 # used to store y coordinate of mouse event
-    
-    #canvas = gui.get_canvas()
-    
-    while True: # main game loop
-        mouseClicked = False
-        gui.plaster(canvas)
-        gui.drape(ship_img, ship_pos)
-        
-        for event in pygame.event.get(): # event handling loop
-            if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
-                pygame.quit()
-                sys.exit()
-            elif event.type == MOUSEMOTION:
-                mousex, mousey = event.pos
-            elif event.type == MOUSEBUTTONUP:
-                mousex, mousey = event.pos
-                mouseClicked = True
-
-        mousex -= gameArea.rect.x
-        mousy -= gameArea.rect.y
-        boxx, boxy = gui.getBoxAtPixel(mousex, mousey)
-        if boxx != None and boxy != None:
-            gui.drawHighlightBox(boxx, boxy, ship_pos, canvas)
-            # The mouse is currently over a box.
-            left, top = gui.leftTopCoordsOfBox(boxx, boxy)
-            if gui.isReachable(left, top, ship_pos, canvas) and mouseClicked:
-                    ship_pos = (left, top) # move the ship
-        
-        # Redraw the screen and wait a clock tick.
-        pygame.display.update()
-        pygame.display.flip()
-        FPSCLOCK.tick(FPS)
 
 if __name__ == '__main__':
     main()  

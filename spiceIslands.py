@@ -100,7 +100,7 @@ def main():
                 s = pygame.surfarray.make_surface(bg)
                 DISPLAYSURF.blit(s, (x * 160, y* 160))
                 if not shipPlaced:
-                    ship_pos = (x * 160 + 120, y * 160 + 20)
+                    ship_pos = (x * 160 + 20, y * 160 + 20)
                     shipPlaced = True
     
     canvas = pygame.surfarray.array3d(DISPLAYSURF)
