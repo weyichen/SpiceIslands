@@ -209,6 +209,8 @@ class MainGui(gui.Desktop):
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
+        global NUMTURNS
+    
         self.init()
         FPSCLOCK = pygame.time.Clock()
         mouse_x = 0 # used to store x coordinate of mouse event
@@ -237,6 +239,12 @@ class MainGui(gui.Desktop):
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
                         self.ship_pos = (left, top) # move the ship
                         self.game_area.repaint()
+                        
+                        # decrement number of turns
+                        NUMTURNS -= 1
+                        turns_label.set_text(str(NUMTURNS))
+                        turns_label.resize()
+                        turns_label.repaint()
                         
                         if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
                             visited = self.islands_at(box_x, box_y)
@@ -279,7 +287,6 @@ class MainGui(gui.Desktop):
             island_rect = self.islands[island][1]
             if island_rect.colliderect(box_rect):
                 islands_here.append(island)
-            else:
         return islands_here
     
     def highlight_border(self, box_x, box_y, ship_pos, canvas):
