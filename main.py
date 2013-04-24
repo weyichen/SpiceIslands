@@ -11,10 +11,11 @@ import time
 sys.path.insert(0, "pgu")
 from pgu import gui # TODO: figure out how to install pgu
 
-# global variable settings
-SHIP_NAME = "SANTA MARIA"
+# initial setup settings
+ship_name = "SANTA MARIA"
 num_turns = 30
 moves_per_turn = 3
+spices_to_win = 5
 
 """ Graphical Parameters for Game Map """
 
@@ -59,12 +60,13 @@ YELLOW   = ( 255, 255,   0)
 WHITE    = ( 255, 255, 255)
 
 # GUI Elements that need to be updated
-spice_table = gui.List(width=150, height=100)
-resource_table = gui.List(width=150, height=100)
-score_table = gui.List(width=150, height=100)
+spice_table = gui.List(width=175, height=100)
+spice_win_table = gui.List(width=175, height=100)
+resources_table = gui.List(width=175, height=100)
+islands_table = gui.List(width=175, height=100)
 turns_label = gui.Label(str(num_turns))
 moves_label = gui.Label(str(moves_per_turn))
-ship_label = gui.Label(SHIP_NAME)
+ship_label = gui.Label(ship_name)
 
 # Variables that keep track of the state of the game
 dialog_on = False
@@ -76,7 +78,7 @@ resources_collected = []
 SPICE_LIST = ["clove","cardamom","nutmeg","mace","anise",
         "cinnamon","pepper","cumin","camphor","fennel"]
 random.shuffle(SPICE_LIST)
-winning_spices = SPICE_LIST[:5]
+winning_spices = SPICE_LIST[:spices_to_win]
         
 RESOURCE_LIST = ["sago","rice","tempeh","orangutan","guilders","cloth","wood"]
 
@@ -131,7 +133,7 @@ def find_resource():
     set_event("Resources/" + resource, "Fortune smiles upon you! You have found " + resource + ".")
     
     resources_collected.append(resource)
-    set_table(resource_table, resources_collected)
+    set_table(resources_table, resources_collected)
     
 def malaria():
     global moves_per_turn
@@ -149,7 +151,7 @@ def voc_bad():
         set_event("Events/voc", "Fellow VOC employees are in need. You give them your " + resource + ".")
         
         resources_collected.pop(resource_no)
-        set_table(resource_table, resources_collected)
+        set_table(resources_table, resources_collected)
 
 def voc_good():
     global moves_per_turn
@@ -199,7 +201,7 @@ def pirates():
         set_event("Events/pirates", "AAAARGHH! Pirates have stolen your " + resource + ".")
         
         resources_collected.pop(resource_no)
-        set_table(resource_table, resources_collected)
+        set_table(resources_table, resources_collected)
 
 def flotsam():
     global resources_collected
@@ -209,7 +211,7 @@ def flotsam():
             "shipwreck, you find some valuable " + resource + ".")
     
     resources_collected.append(resource)
-    set_table(resource_table, resources_collected)
+    set_table(resources_table, resources_collected)
 
 def lost_at_sea():
     global num_turns
@@ -354,11 +356,11 @@ class InitDialog(gui.Dialog):
     
     def confirm(self):
         """ sets values and exits """
-        global SHIP_NAME, num_turns, moves_per_turn
-        SHIP_NAME = self.name_input.value
+        global ship_name, num_turns, moves_per_turn
+        ship_name = str(self.name_input.value)
         num_turns = int(self.turn_label.value)
         moves_per_turn = int(self.move_label.value)
-        update_label(ship_label, SHIP_NAME)
+        update_label(ship_label, ship_name)
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
         dialog_on = False
@@ -447,7 +449,7 @@ class Island:
     def visit(self):
         """ Record a visit to this island by the player. """
         self.visited = True
-        update_table(score_table, self.name)
+        update_table(islands_table, self.name)
     
 
 # drawing area where the action happens
@@ -578,16 +580,17 @@ class MainGui(gui.Desktop):
         
         # row 1: name of ship
         menu.tr()
-        name_label = gui.Label(SHIP_NAME)
+        name_label = gui.Label(ship_name)
         menu.td(name_label)
         
-        # sidebar row 1: spices and resources table
+        # sidebar row 1: tables of spices on hand and spices needed to win
         menu.tr()
-        menu.td(gui.Label("Spices"))
-        menu.td(gui.Label("Resources"))
+        menu.td(gui.Label("Spices you have"))
+        menu.td(gui.Label("Spices to win"))
         menu.tr()
         menu.td(spice_table, align=-1, valign=-1)
-        menu.td(resource_table, align=-1, valign=-1)
+        set_table(spice_win_table, winning_spices)
+        menu.td(spice_win_table, align=-1, valign=-1)
 
         # row 3: turns left, moves left, and directional controls
         menu.tr()
@@ -596,16 +599,14 @@ class MainGui(gui.Desktop):
         menu.tr()
         menu.td(gui.Label("Moves Left"))
         menu.td(moves_label)
-        
-        help_button = gui.Button("Help")
-        help_button.connect(gui.CLICK, update_table(spice_table, "Clicked"), None)
-        menu.td(help_button)
 
-        # row 4: score table
+        # row 4: resource and islands visited tables
         menu.tr()
+        menu.td(gui.Label("Resources"))
         menu.td(gui.Label("Islands Visited"))
         menu.tr()
-        menu.td(score_table, align=-1, valign=-1)
+        menu.td(resources_table, align=-1, valign=-1)
+        menu.td(islands_table, align=-1, valign=-1)
         return menu
     
     def __init__(self, disp):
@@ -682,6 +683,12 @@ class MainGui(gui.Desktop):
                         if nearby:
                             for island in nearby:
                                 self.visit_island(island)
+                        else :
+                            sea_event_gen = random.randint(0,42)
+                            num_resources = len(resources_collected)
+        
+                            if sea_event_gen < 14 :
+                                sea_events[sea_event_gen]()
         
                         check_game_over() # check if the game is over
     
@@ -758,7 +765,7 @@ class MainGui(gui.Desktop):
                     "your " + resource + " for " + the_spice + "!")
                     
                 resources_collected.pop(resource_no)
-                set_table(resource_table, resources_collected)
+                set_table(resources_table, resources_collected)
                 spices_collected.append(the_spice)
                 set_table(spice_table, spices_collected)
     
@@ -777,7 +784,7 @@ class MainGui(gui.Desktop):
         """
         slice = canvas[left:left+39,top:top+39, :-1]
         dist = self.block_distance(left, top, ship_pos)
-        return 0 < dist and dist <= moves_left and not self.is_island(slice)
+        return (left, top) != ship_pos and dist <= moves_left and not self.is_island(slice)
     
     def is_island(self, slice):
         """ Determine from a pixel array slice whether or not a part
