@@ -26,3 +26,5 @@ all available turns without collecting the necessary spices, the game is over an
 A sidebar on the left of the map displays a list of the spices collected so far, the quantity of spices collected, and the
 names of the islands that the player has visited. The sidebar also reports the number of remaining moves available in this
 turn, as well as the number of turns remaining in the game.
+
+For instructions on setting up and playing Spice Islands, see please see requirements.txt.
