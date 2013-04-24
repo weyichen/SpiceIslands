@@ -70,11 +70,12 @@ dialog_on = False
 moves_left = moves_per_turn
 spices_collected = []
 resources_collected = []
-winning_spices = ["clove"]
 
 # proper nouns
 SPICE_LIST = ["clove","cardamom","nutmeg","mace","anise",
         "cinnamon","pepper","cumin","camphor","fennel"]
+random.shuffle(SPICE_LIST)
+winning_spices = SPICE_LIST[:5]
         
 RESOURCE_LIST = ["sago","rice","tempeh","orangutan","guilders","cloth","wood"]
 
@@ -298,6 +299,7 @@ def update_label(element, string):
 # initial setup tbl
 class InitDialog(gui.Dialog):
     def __init__(self,**params):
+        dialog_on = True
         title = gui.Label("Setup Game Options")
         width = 200
         height = 100
@@ -349,10 +351,12 @@ class InitDialog(gui.Dialog):
         update_label(ship_label, SHIP_NAME)
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
+        dialog_on = False
         self.close()
 
 class EventDialog(gui.Dialog):
     def __init__(self,**params):
+        dialog_on = True
         title = gui.Label("Game Event")
         #width = 200
         #height = 100
@@ -375,10 +379,12 @@ class EventDialog(gui.Dialog):
     def confirm(self):
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
+        dialog_on = False
         self.close()
 
 class GameoverDialog(gui.Dialog):
     def __init__(self, **params):
+        dialog_on = True
         title = gui.Label("Game Over")
         
         doc = gui.Document(width=400)
@@ -399,6 +405,7 @@ class GameoverDialog(gui.Dialog):
         gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
+        dialog_on = False
         self.close()        
         
 class Island:
@@ -558,9 +565,11 @@ class MainGui(gui.Desktop):
         
         # sidebar row 1: spices and resources table
         menu.tr()
-        menu.td(gui.Label("Spices & Resources"))
+        menu.td(gui.Label("Spices"))
+        menu.td(gui.Label("Resources"))
         menu.tr()
         menu.td(spice_table, align=-1, valign=-1)
+        menu.td(resource_table, align=-1, valign=-1)
 
         # row 3: turns left, moves left, and directional controls
         menu.tr()
@@ -621,7 +630,7 @@ class MainGui(gui.Desktop):
         mouse_x = 0 # used to store x coordinate of mouse event
         mouse_y = 0 # used to store y coordinate of mouse event
                 
-        while True:
+        while True and not dialog_on:
             mouse_clicked = False
             map_tile_x, map_tile_y = None, None
             self.draw_pixel_array(self.canvas)
@@ -647,7 +656,7 @@ class MainGui(gui.Desktop):
                 self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
-                    # The user has successfully executed a move
+                    # The player has successfully executed a move
                     self.move_ship(left, top)
                     # Report spices collected and update visited islands list
                     nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
@@ -680,7 +689,7 @@ class MainGui(gui.Desktop):
         self.game_area.repaint()
     
     def visit_island(self, island):
-        """ The user has successfully made landfall. Update their inventory
+        """ The player has successfully made landfall. Update their inventory
             accordingly, generate corresponding events, and note that this 
             island has been visited.
         """
@@ -700,9 +709,40 @@ class MainGui(gui.Desktop):
             
             set_event("Spices/"+the_spice, "You collected " + \
                     the_spice+" from " + island.get_name() + ".")
+                    
+        num_resources = len(resources_collected)
+        if (num_resources):
+            if "treasure" in resources_collected:
+                resources_collected.remove("treasure")
+                
+                spice_no = random.randint(0,9)
+                spice_1 = SPICE_LIST[spice_no]
+                spices_collected.append(spice_1)
+                
+                spice_no = random.randint(0,9)
+                spice_2 = SPICE_LIST[spice_no]
+                spices_collected.append(spice_2)
+                
+                set_table(spice_table, spices_collected)
             
-            if set(winning_spices).issubset(set(spices_collected)):
-                update_table(score_table, "You Won!")
+                set_event("Events/treasure", "You are able to purchase " + \
+                    spice_1 + " " + spice_2 + " from " + island.get_name() + \
+                    " with your treasure.")
+            else:
+                resource_no = random.randint(0, len(resources_collected) - 1)
+                resource = resources_collected[resource_no]
+                resources_collected.pop(resource_no)
+                
+                resources_collected.remove("treasure")
+                
+                spice_no = random.randint(0,9)
+                the_spice = SPICE_LIST[spice_no]
+                spices_collected.append(the_spice)
+                
+                set_table(spice_table, spices_collected)
+            
+                set_event("Spices/" + the_spice, "You are able to trade " + \
+                    "your " + resource + " for " + the_spice + "!")
     
     def block_distance(self, left, top, ship_pos):
         """ Determine how many blocks away from the ship's current
@@ -719,7 +759,7 @@ class MainGui(gui.Desktop):
         """
         slice = canvas[left:left+39,top:top+39, :-1]
         dist = self.block_distance(left, top, ship_pos)
-        return dist <= moves_left and not self.is_island(slice)
+        return 0 < dist and dist <= moves_left and not self.is_island(slice)
     
     def is_island(self, slice):
         """ Determine from a pixel array slice whether or not a part
