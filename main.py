@@ -6,6 +6,7 @@ from perlin_noise import *
 from island_generator import *
 import numpy as np
 import Queue
+import time
 
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
@@ -375,6 +376,9 @@ class InitDialog(gui.Dialog):
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
         self.close()
+        pygame.display.update()
+        # Don't free display immediately; avoid erroneous map clicks
+        time.sleep(0.1)
         dialog_on = False
 
 class EventDialog(gui.Dialog):
@@ -407,6 +411,9 @@ class EventDialog(gui.Dialog):
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
         self.close()
+        pygame.display.update()
+        # Don't free display immediately; avoid erroneous map clicks
+        time.sleep(0.1)
         dialog_on = False
 
 class GameOverDialog(gui.Dialog):
@@ -437,6 +444,9 @@ class GameOverDialog(gui.Dialog):
         """ sets values and exits """
         global dialog_on
         self.close()
+        pygame.display.update()
+        # Don't free display immediately; avoid erroneous map clicks
+        time.sleep(0.1)
         dialog_on = False
         
 class Island:
@@ -664,7 +674,7 @@ class MainGui(gui.Desktop):
         mouse_y = 0 # used to store y coordinate of mouse event
         
         # Prevent mouse input to map while dialog boxes are open
-        delayInput = True
+        delay_input = True
         
         while True:
             mouse_clicked = False
@@ -691,11 +701,11 @@ class MainGui(gui.Desktop):
                     # only get map position if we clicked inside map
                     screen_rect = self.get_map_area()
                     mouse_x, mouse_y = event.pos
-                    if mouse_x > screen_rect.x and not delay_input:
+                    if mouse_x > screen_rect.x and not dialog_on and not delay_input:
                         mouse_clicked = True
             
             map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-            if map_tile_x != None and map_tile_y != None and not delay_input and num_turns > 0:
+            if map_tile_x != None and map_tile_y != None and not dialog_on and not delay_input and num_turns > 0:
                 # The mouse is currently over a box.
                 self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
