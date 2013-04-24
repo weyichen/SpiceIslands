@@ -5,6 +5,7 @@ import map
 from perlin_noise import *
 from island_generator import *
 import numpy as np
+import time
 
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
@@ -103,9 +104,10 @@ def natives_attack():
     if (num_spices):
         spice_no = random.randint(0,len(spices_collected)-1)
         spice = spices_collected[spice_no]
+        set_event("Events/attack", "The natives are hostile! You lose a turn and your " + spice + ".")
+        
         spices_collected.pop(spice_no)
         set_table(spice_table, spices_collected)
-        set_event("Events/attack", "The natives are hostile! You lose a turn and your " + spice + ".")
     else:
         set_event("Events/attack", "The natives are hostile! You lose a turn.")
     
@@ -116,10 +118,10 @@ def natives_help():
     global num_turns, spices_collected
     spice_no = random.randint(0,len(SPICE_LIST) - 1)
     spice = SPICE_LIST[spice_no]
-    spices_collected.append(spice)
-    set_table(spice_table, spices_collected)
     set_event("Events/help", "The natives are friendly! You gain a turn and some " + spice + ".")
     
+    spices_collected.append(spice)
+    set_table(spice_table, spices_collected)
     num_turns += 1
 
 def find_resource():
@@ -144,8 +146,10 @@ def voc_bad():
     if (num_resources):
         resource_no = random.randint(0,len(resources_collected) - 1)
         resource = RESOURCE_LIST[resource_no]
-        resources_collected.pop(resource_no)
         set_event("Events/voc", "Fellow VOC employees are in need. You give them your " + resource + ".")
+        
+        resources_collected.pop(resource_no)
+        set_table(resource_table, resources_collected)
 
 def voc_good():
     global moves_per_turn
@@ -159,10 +163,11 @@ def typhoon():
     num_spices = len(spices_collected)
     
     if (num_spices):
-        set_event("Events/typhoon", "You are caught in a typhoon! A spice is washed off board and lost in the sea. " + \
-            "You also lose one turn to inclement weather.")
         spice_no = random.randint(0,len(spices_collected)-1)
         spice = spices_collected[spice_no]
+        set_event("Events/typhoon", "You are caught in a typhoon! Your " + spice + " is washed off board and lost in the sea. " + \
+            "You also lose one turn to inclement weather.")
+        
         spices_collected.pop(spice_no)
         set_table(spice_table, spices_collected)
     else:
@@ -191,8 +196,10 @@ def pirates():
     if (num_resources):
         resource_no = random.randint(0,len(resources_collected) - 1)
         resource = RESOURCE_LIST[resource_no]
-        resources_collected.pop(resource_no)
         set_event("Events/pirates", "AAAARGHH! Pirates have stolen your " + resource + ".")
+        
+        resources_collected.pop(resource_no)
+        set_table(resource_table, resources_collected)
 
 def flotsam():
     global resources_collected
@@ -234,8 +241,9 @@ def check_game_over():
         set_event("Events/won", over_msg)
         over_dialog = GameoverDialog()
         over_dialog.open()
+        return true
         
-    elif num_turns == 0 or moves_per_turn == 0:
+    if num_turns == 0 or moves_per_turn == 0:
         if moves_per_turn == 0:
             num_turns = 0
             over_msg = "You were lucky to be the last survivor of your crew. Now you are dead."
@@ -244,6 +252,7 @@ def check_game_over():
         set_event("Events/lost", over_msg)
         over_dialog = GameoverDialog()
         over_dialog.open()
+        return true
 
 land_events = {
     0: natives_attack,
@@ -630,7 +639,7 @@ class MainGui(gui.Desktop):
         mouse_x = 0 # used to store x coordinate of mouse event
         mouse_y = 0 # used to store y coordinate of mouse event
                 
-        while True and not dialog_on:
+        while True:
             mouse_clicked = False
             map_tile_x, map_tile_y = None, None
             self.draw_pixel_array(self.canvas)
@@ -650,21 +659,22 @@ class MainGui(gui.Desktop):
                     if mouse_x > screen_rect.x:
                         mouse_clicked = True
             
-            map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-            if map_tile_x != None and map_tile_y != None and num_turns > 0:
-                # The mouse is currently over a box.
-                self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
-                left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-                if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
-                    # The player has successfully executed a move
-                    self.move_ship(left, top)
-                    # Report spices collected and update visited islands list
-                    nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
-                    if nearby:
-                        for island in nearby:
-                            self.visit_island(island)
-    
-                    check_game_over() # check if the game is over
+            if not dialog_on:
+                map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
+                if map_tile_x != None and map_tile_y != None and num_turns > 0:
+                    # The mouse is currently over a box.
+                    self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
+                    left, top = self.map_tile_corner(map_tile_x, map_tile_y)
+                    if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
+                        # The player has successfully executed a move
+                        self.move_ship(left, top)
+                        # Report spices collected and update visited islands list
+                        nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
+                        if nearby:
+                            for island in nearby:
+                                self.visit_island(island)
+        
+                        check_game_over() # check if the game is over
     
             # Redraw the screen and wait a clock tick.
             self.repaint()
@@ -689,60 +699,59 @@ class MainGui(gui.Desktop):
         self.game_area.repaint()
     
     def visit_island(self, island):
-        """ The player has successfully made landfall. Update their inventory
-            accordingly, generate corresponding events, and note that this 
-            island has been visited.
+        """ The player has successfully made landfall. Allow them to either
+            experience random events, harvest spices from the island, or trade
+            resources for spices.
         """
         
         land_event_gen = random.randint(0,22)
+        num_resources = len(resources_collected)
+        
         if land_event_gen < 11 :
             land_events[land_event_gen]()
             
-        
-        if island.discovered():
+        elif island.discovered():
             island.visit()
             
             spice_no = random.randint(0,9)
             the_spice = SPICE_LIST[spice_no]
-            spices_collected.append(the_spice)
-            set_table(spice_table, spices_collected)
-            
             set_event("Spices/"+the_spice, "You collected " + \
                     the_spice+" from " + island.get_name() + ".")
+            spices_collected.append(the_spice)
+            set_table(spice_table, spices_collected)
                     
-        num_resources = len(resources_collected)
-        if (num_resources):
+        elif (num_resources):
             if "treasure" in resources_collected:
                 resources_collected.remove("treasure")
                 
                 spice_no = random.randint(0,9)
                 spice_1 = SPICE_LIST[spice_no]
-                spices_collected.append(spice_1)
                 
                 spice_no = random.randint(0,9)
                 spice_2 = SPICE_LIST[spice_no]
-                spices_collected.append(spice_2)
-                
-                set_table(spice_table, spices_collected)
             
                 set_event("Events/treasure", "You are able to purchase " + \
                     spice_1 + " " + spice_2 + " from " + island.get_name() + \
                     " with your treasure.")
+                
+                spices_collected.append(spice_1)
+                spices_collected.append(spice_2)
+                set_table(spice_table, spices_collected)
+                
             else:
                 resource_no = random.randint(0, len(resources_collected) - 1)
                 resource = resources_collected[resource_no]
-                resources_collected.pop(resource_no)
-                
-                resources_collected.remove("treasure")
                 
                 spice_no = random.randint(0,9)
                 the_spice = SPICE_LIST[spice_no]
-                spices_collected.append(the_spice)
-                
-                set_table(spice_table, spices_collected)
             
                 set_event("Spices/" + the_spice, "You are able to trade " + \
                     "your " + resource + " for " + the_spice + "!")
+                    
+                resources_collected.pop(resource_no)
+                set_table(resource_table, resources_collected)
+                spices_collected.append(the_spice)
+                set_table(spice_table, spices_collected)
     
     def block_distance(self, left, top, ship_pos):
         """ Determine how many blocks away from the ship's current
