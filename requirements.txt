@@ -43,7 +43,7 @@ In order to play Spice Islands, follow the instructions below in order:
     pygame 1.9.1 for 32-bit Python 2.7 in a manner compatible with your operating system
 2. Clone this git repository on your computer and extract the compressed
     folder to a location of your choice
-3. Run new_gui.py. Expect the game to load slowly. Random map generation is computationally
+3. Run main.py. Expect the game to load slowly. Random map generation is computationally
     expensive and therefore time-consuming. Fear not; we have created a pretty splash screen 
     for your amusement.
 4. Have fun! For detailed game information, see README.md.
