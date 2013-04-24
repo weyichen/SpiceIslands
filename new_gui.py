@@ -256,6 +256,7 @@ class EventDialog(gui.Dialog):
 
 # drawing area where the action happens
 class DrawingArea(gui.Widget):
+    """ A GUI wrapper for the game map display """
     def __init__(self, width, height):
         gui.Widget.__init__(self, width=width, height=height)
         self.image_buffer = pygame.Surface((width, height))
@@ -265,6 +266,7 @@ class DrawingArea(gui.Widget):
         surf.blit(self.image_buffer, (0, 0))
         
 class MainGui(gui.Desktop):
+    """ The main GUI wrapper for our game """
     game_area_w = MAP_WIDTH
     game_area_h = MAP_HEIGHT
     game_area = None
@@ -369,6 +371,7 @@ class MainGui(gui.Desktop):
         pygame.display.update()
         
     def make_menu_sidebar(self):
+        """ Make a sidebar containing GUI elements reporting game status """
         menu = gui.Table(width=100, height=300, vpadding = 0, hpadding = 2, valign = -1)
         
         # row 1: name of ship
@@ -435,7 +438,7 @@ class MainGui(gui.Desktop):
         self.make_game_map()
 
     def run(self):
-        global NUM_TURNS, moves_left
+        global moves_left
         screen_rect = self.get_map_area()
         
         self.init()
@@ -466,67 +469,92 @@ class MainGui(gui.Desktop):
             
             map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
             if map_tile_x != None and map_tile_y != None and NUM_TURNS > 0:
-                self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
+                self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
-                        # decrement number of moves by the distance traveled
-                        moves_left-= self.block_distance(left, top, self.ship_pos)
-                        # decrement number of turns
-                        if moves_left == 0:
-                            moves_left = MOVES_PER_TURN
-                            NUM_TURNS-=1
-                            update_label(turns_label, str(NUM_TURNS))
-                        update_label(moves_label, str(moves_left))
-                
-                        self.ship_pos = (left, top) # move the ship
-                        self.game_area.repaint()
-                        
-                        # Report spices collected and update visited islands list
-                        nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
-                        if nearby:
-                            for island in nearby:
-                                info = self.islands[island]
-                                visited = info[0]
-                                island_rect = info[1]
-                                if not visited:
-                                    update_table(score_table, island)
-                                    
-                                    spice_no = random.randint(0,9)
-                                    the_spice = SPICE_LIST[spice_no]
-                                    if the_spice in spices_collected:
-                                        spices_collected[the_spice] = spices_collected[the_spice] + 1
-                                    else:
-                                        spices_collected[the_spice] = 1
-                                    spice_list = [str(key) + " : " + str(val) \
-                                            for key, val in spices_collected.items()]
-                                    set_table(spice_table, spice_list)
-                                    
-                                    # Mark as visited
-                                    self.islands[island] = (True, island_rect)
-                                    
-                                    if set(winning_spices).issubset(set(spices_collected)) or island == "Atlantis":
-                                        update_table(score_table, "You Won!")
+                    # The user has successfully executed a move
+                    move_ship(left, top)
+                    # Report spices collected and update visited islands list
+                    nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
+                    if nearby:
+                        for island in nearby:
+                            self.visit_island(island)
             
             # Redraw the screen and wait a clock tick.
             self.repaint()
             self.loop()
             FPSCLOCK.tick(FPS)
+            
+    def move_ship(self, left, top):
+        """ Move the ship to the specified destination, redraw the display,
+            and adjust the moves and turns remaining accordingly.
+        """
+        # decrement number of moves by the distance traveled
+        moves_left-= self.block_distance(left, top, self.ship_pos)
+        # decrement number of turns
+        if moves_left == 0:
+            moves_left = MOVES_PER_TURN
+            NUM_TURNS-=1
+            update_label(turns_label, str(NUM_TURNS))
+        update_label(moves_label, str(moves_left))
+        
+        self.ship_pos = (left, top) # move the ship
+        self.game_area.repaint()
+    
+    def visit_island(self, island):
+        """ The user has successfully made landfall. Update their inventory
+            accordingly, generate corresponding events, and note that this 
+            island has been visited.
+        """
+        info = self.islands[island]
+        visited = info[0]
+        island_rect = info[1]
+        if not visited:
+            update_table(score_table, island)
+            
+            spice_no = random.randint(0,9)
+            the_spice = SPICE_LIST[spice_no]
+            if the_spice in spices_collected:
+                spices_collected[the_spice] = spices_collected[the_spice] + 1
+            else:
+                spices_collected[the_spice] = 1
+                
+            spice_list = [str(key) + " : " + str(val) \
+                    for key, val in spices_collected.items()]
+            set_table(spice_table, spice_list)
+            
+            # Mark as visited
+            self.islands[island] = (True, island_rect)
+            
+            if set(winning_spices).issubset(set(spices_collected)) or island == "Atlantis":
+                update_table(score_table, "You Won!")
     
     def block_distance(self, left, top, ship_pos):
+        """ Determine how many blocks away from the ship's current
+            position the user's intended destination lies.
+        """
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
         return int(np.linalg.norm(destination - current_location) / MAP_TILE_SIZE)
     
     def is_reachable(self, left, top, ship_pos, canvas):
+        """ Determine whether or not the user's intended destination
+            is a navigable marine tile that is also within reach considering
+            the range of the ship in the current turn.
+        """
         slice = canvas[left:left+39,top:top+39, :-1]
         dist = self.block_distance(left, top, ship_pos)
         return dist <= moves_left and not self.is_island(slice)
     
     def is_island(self, slice):
+        """ Determine from a pixel array slice whether or not a part
+            of the map belongs to an island minimap.
+        """
         return np.sum(slice != BG_COLOR_LEVEL) > 3 * np.size(slice) / 8
     
     def nearby_islands(self, x, y, canvas):
+        """ List all islands neighboring the square in question """
         islands_here = []
         for map_tile_x in range(max(0, x-1), min(MAP_COLUMNS, x + 2)):
             for map_tile_y in range(max(0, y-1), min(MAP_ROWS, y + 2)):
@@ -542,6 +570,10 @@ class MainGui(gui.Desktop):
         return islands_here
     
     def highlight_border(self, map_tile_x, map_tile_y, ship_pos, canvas):
+        """ Draw a border around the square that the user's cursor is hovering over
+            with a color corresponding to its status as a navigable marine target,
+            reachable island port, or an unaccessible destination.
+        """
         color = None
         left, top = self.map_tile_corner(map_tile_x, map_tile_y)
         if (left, top) == ship_pos:
@@ -559,12 +591,18 @@ class MainGui(gui.Desktop):
         return
 
     def map_tile_corner(self, map_tile_x, map_tile_y):
+        """ Report the pixel coordinates of the top-left corner of the
+            specified tile of the game map.
+        """
         # Convert board coordinates to pixel coordinates
         left = map_tile_x * MAP_TILE_SIZE + MARGIN
         top = map_tile_y * MAP_TILE_SIZE + MARGIN
         return (left, top) 
 
     def get_map_tile_at_pixel(self, x, y):
+        """ Report the indices of the map tile, if any, overlapping
+            with the specified pixel position
+        """
         screen_rect = self.get_map_area()
         for map_tile_x in range(MAP_COLUMNS):
             for map_tile_y in range(MAP_ROWS):
@@ -575,12 +613,15 @@ class MainGui(gui.Desktop):
         return (None, None)
     
     def get_map_area(self):
+        """ Report the bounding box of the game map within the display """
         return self.game_area.get_abs_rect()
         
     def draw_surface(self, surf, pos):
+        """ Layer the desired image surface onto the display at the specified pixel position. """
         self.game_area.image_buffer.blit(surf, pos)
         
     def draw_pixel_array(self, canvas):
+        """ Layer the desired pixel array onto the display at the specified pixel position. """
         pygame.surfarray.blit_array(self.game_area.image_buffer, canvas)
 
 def main():
