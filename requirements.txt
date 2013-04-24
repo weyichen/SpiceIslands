@@ -1,0 +1,47 @@
+SPICE ISLANDS PROJECT REQUIREMENTS
+==================================
+
+This file describes our project environment.  It describes how to run the project. 
+For our initial goals (and our modified goals after advice from the professor),
+see proposal.md.
+For a detailed description of what features our project has, and notes on interesting
+features of the code, please see README.md.
+
+PYTHON ENVIRONMENT
+------------------
+
+Imported Standard Library modules
+---------------------------------
+random
+sys
+os
+
+Additional modules
+------------------
+pygame 1.9.1 (http://www.pygame.org/)
+numpy 1.7.0(http://www.numpy.org/)
+
+Foreign Python code (not our work)
+----------------------------------
+Phil's Game Utilities [pgu] (http://www.pygame.org/projects/9/108/)
+"""
+    We used this to wrap our game in a graphical user interface (GUI)
+    Everything in the SpiceIslands/pgu folder is from this module
+"""
+
+Island generator (http://www.pygame.org/project-Island+Generator-2446-.html)
+"""
+    We used this to generate random geographical features for our maps.
+    The files map.py, island_generator.py, and perlin_noise.py were from
+    this pygame project. We made slight modifications to meet our needs.
+"""
+
+GETTING STARTED
+---------------
+In order to play Spice Islands, follow the instructions below in order:
+1. Install 32-bit Python 2.7, numpy 1.7.0 for 32-bit Python 2.7, and
+    pygame 1.9.1 for 32-bit Python 2.7 in a manner compatible with your operating system
+2. Clone this git repository on your computer and extract the compressed
+    folder to a location of your choice
+3. Run new_gui.py.
+4. Have fun! For detailed game information, see README.md.
