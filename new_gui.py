@@ -53,13 +53,19 @@ moves_label = gui.Label(str(MOVESPTURN))
 # Variables that keep track of the state of the game
 dialog_on = False
 moves_left = MOVESPTURN
-spices_collected = []
+spices_collected = {}
 winning_spices = ["clove"]
 
 # Helper functions for updating labels and lists
 def update_table(element, string):
     element.add(string)
     element.resize()
+    element.repaint()
+   
+def set_table(element, strings):
+    element.clear()
+    for string in strings:
+        element.add(string)
     element.repaint()
     
 # Helper function for updating labels and lists
@@ -149,49 +155,54 @@ class MainGui(gui.Desktop):
         gui.Desktop.__init__(self)
         
         self.connect(gui.QUIT, self.quit, None)
+        
+        # Display splashscreen while loading
+        raw_splash_img = pygame.image.load(os.path.join('Images', 'splash.png'))
+        splash_img = pygame.transform.smoothscale(raw_splash_img, (800, 480))
+        disp.blit(splash_img, (0, 0))
+        pygame.display.update()
 
         # Setup the 'game' area where the action takes place
         self.game_area = DrawingArea(self.game_area_w,
                                     self.game_area_h)
                                     
-        sidebar = gui.Table(width=100, height=400, valign = 1)
+        menu = gui.Table(width=100, height=400, vpadding = 0, hpadding = 2, valign = -1)
         
         # row 1: name of ship
-        sidebar.tr()
+        menu.tr()
         name_label = gui.Label(SHIPNAME)
-        sidebar.td(name_label)
+        menu.td(name_label)
         
         # sidebar row 1: spices and resources table
-        sidebar.tr()
-        sidebar.td(gui.Label("Spices & Resources"))
-        sidebar.tr()
-        sidebar.td(spice_table, align=-1, valign=-1)
+        menu.tr()
+        menu.td(gui.Label("Spices & Resources"))
+        menu.tr()
+        menu.td(spice_table, align=-1, valign=-1)
 
         # row 3: turns left, moves left, and directional controls
-        sidebar.tr()
-        sidebar.td(gui.Label("Turns Left"))
-        sidebar.td(turns_label)
-        sidebar.tr()
-        sidebar.td(gui.Label("Moves Left"))
-        sidebar.td(moves_label)
+        menu.tr()
+        menu.td(gui.Label("Turns Left"))
+        menu.td(turns_label)
+        menu.tr()
+        menu.td(gui.Label("Moves Left"))
+        menu.td(moves_label)
         
         help_button = gui.Button("Help")
         help_button.connect(gui.CLICK, update_table(spice_table, "Clicked"), None)
-        sidebar.td(help_button)
+        menu.td(help_button)
 
         # row 4: score table
-        sidebar.tr()
-        sidebar.td(gui.Label("Islands Visited"))
-        sidebar.tr()
-        sidebar.td(score_table, align=-1, valign=-1)
+        menu.tr()
+        menu.td(gui.Label("Islands Visited"))
+        menu.tr()
+        menu.td(score_table, align=-1, valign=-1)
         
-        #sidebar.tr()
-        
-        
+        spacer = gui.Table(width=800, height=100, vpadding = 0, hpadding = 2, valign = -1)
         
         # set up the overall layout
         tbl = gui.Table(height=disp.get_height())
-        tbl.td(sidebar)
+        tbl.tr()
+        tbl.td(menu)
         tbl.td(self.game_area)
         
         self.init(tbl, disp)
@@ -238,7 +249,8 @@ class MainGui(gui.Desktop):
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
-        global NUMTURNS, moves_left, last_island_visited
+        global NUMTURNS, moves_left
+        screen_rect = self.get_render_area()
         
         self.init()
         FPSCLOCK = pygame.time.Clock()
@@ -248,44 +260,45 @@ class MainGui(gui.Desktop):
         # only run main game loop when there is no dialog
         while True and not dialog_on:
             mouse_clicked = False
+            box_x, box_y = None, None
             self.plaster(self.canvas)
             self.drape(self.ship_img, self.ship_pos)
             
             for event in pygame.event.get(): # event handling loop
+                self.event(event)
                 if event.type == QUIT or (event.type == KEYUP and event.key == K_ESCAPE):
                     pygame.quit()
                     sys.exit()
                 elif event.type == MOUSEMOTION:
                     mouse_x, mouse_y = event.pos
                 elif event.type == MOUSEBUTTONUP:
+                    # only get map position if we clicked inside map
+                    screen_rect = self.get_render_area()
                     mouse_x, mouse_y = event.pos
-                    mouse_clicked = True
+                    if mouse_x > screen_rect.x:
+                        mouse_clicked = True
             
-            # only get map position if we clicked inside map
-            if mouse_x > 100:
-                box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
-            
+            box_x, box_y = self.get_box_at_pixel(mouse_x, mouse_y)
             if box_x != None and box_y != None and NUMTURNS > 0:
                 self.highlight_border(box_x, box_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
                 left, top = self.box_corner(box_x, box_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
-                        self.ship_pos = (left, top) # move the ship
-                        self.game_area.repaint()
-                        
-                        # decrement number of moves
-                        moves_left-=1
-                        
+                        # decrement number of moves by the distance traveled
+                        moves_left-= self.block_distance(left, top, self.ship_pos)
                         # decrement number of turns
                         if moves_left == 0:
                             moves_left = MOVESPTURN
                             NUMTURNS-=1
                             update_label(turns_label, str(NUMTURNS))
-                        
                         update_label(moves_label, str(moves_left))
-
-                        if self.near_island(box_x, box_y, self.ship_pos, self.canvas):
-                            nearby = self.islands_at(box_x, box_y)
+                
+                        self.ship_pos = (left, top) # move the ship
+                        self.game_area.repaint()
+                        
+                        # Report spices collected and update visited islands list
+                        nearby = self.nearby_islands(box_x, box_y, self.canvas)
+                        if nearby:
                             for island in nearby:
                                 info = self.islands[island]
                                 visited = info[0]
@@ -294,13 +307,19 @@ class MainGui(gui.Desktop):
                                     update_table(score_table, island)
                                     
                                     spice_no = random.randint(0,9)
-                                    thespice = SPICELIST[spice_no]
-                                    spices_collected.append(thespice)
-                                    update_table(spice_table, thespice)
+                                    the_spice = SPICELIST[spice_no]
+                                    if the_spice in spices_collected:
+                                        spices_collected[the_spice] = spices_collected[the_spice] + 1
+                                    else:
+                                        spices_collected[the_spice] = 1
+                                    spice_list = [str(key) + " : " + str(val) \
+                                            for key, val in spices_collected.items()]
+                                    set_table(spice_table, spice_list)
+                                    
                                     # Mark as visited
                                     self.islands[island] = (True, island_rect)
                                     
-                                    if set(spices_collected).issubset(set(winning_spices)):
+                                    if set(winning_spices).issubset(set(spices_collected)):
                                         update_table(score_table, "You Won!")
             
             # Redraw the screen and wait a clock tick.
@@ -308,44 +327,38 @@ class MainGui(gui.Desktop):
             self.loop()
             FPSCLOCK.tick(FPS)
     
-    def block_distance(self, left, top, ship_pos, canvas):
+    def block_distance(self, left, top, ship_pos):
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
-        return np.linalg.norm(destination - current_location)
+        return int(np.linalg.norm(destination - current_location) / BOXSIZE)
     
     def is_reachable(self, left, top, ship_pos, canvas):
         slice = canvas[left:left+39,top:top+39, :-1]
-        dist = self.block_distance(left, top, ship_pos, canvas)
-        return dist < moves_left*25 and not self.is_island(slice)
+        dist = self.block_distance(left, top, ship_pos)
+        return dist <= moves_left and not self.is_island(slice)
     
     def is_island(self, slice):
         return np.sum(slice != BGCOLOR_LEVEL) > 3 * np.size(slice) / 8
     
-    def near_island(self, x, y, ship_pos, canvas):
-        island = False
+    def nearby_islands(self, x, y, canvas):
+        islands_here = []
         for box_x in range(max(0, x-1), min(BOARDWIDTH, x + 2)):
             for box_y in range(max(0, y-1), min(BOARDHEIGHT, y + 2)):
                 if (box_x == x or box_y == y) :
                     (left, top) = self.box_corner(box_x, box_y)
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
-                        island = True
-        return island
-        
-    def islands_at(self, box_x, box_y):
-        (left, top) = (box_x * BOXSIZE + MARGIN, box_y * BOXSIZE + MARGIN)
-        islands_here = []
-        box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
-        for island in self.islands:
-            island_rect = self.islands[island][1]
-            if island_rect.colliderect(box_rect):
-                islands_here.append(island)
+                        box_rect = pygame.Rect(left, top, BOXSIZE, BOXSIZE)
+                        for island in self.islands:
+                            island_rect = self.islands[island][1]
+                            if island_rect.colliderect(box_rect):
+                                islands_here.append(island)
         return islands_here
     
     def highlight_border(self, box_x, box_y, ship_pos, canvas):
         left, top = self.box_corner(box_x, box_y)
         if self.is_reachable(left, top, ship_pos, canvas):
-            if self.near_island(box_x, box_y, ship_pos, canvas):
+            if self.nearby_islands(box_x, box_y, canvas):
                 color = GREEN
             else:
                 color = YELLOW
