@@ -46,12 +46,11 @@ moves_label = gui.Label(str(MOVES_PER_TURN))
 ship_label = gui.Label(SHIP_NAME)
 
 # Variables that keep track of the state of the game
-dialog_on = False
 moves_left = MOVES_PER_TURN
-spices_collected = {}
+spices_collected = []
 winning_spices = ["clove"]
-event_img = "./Images/Spices/fennel.png"
-event_msg = "You found fennel! You found fennel! You found fennel! You found fennel! You found fennel!"
+event_img = "./Images/Spices/Fennel.png"
+event_msg = ""
 
 # proper nouns
 SPICE_LIST = ["clove","cardomom","nutmeg","mace","anise",
@@ -63,65 +62,99 @@ ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
         "Bali", "Singapore", "Borneo", "Hawaii", "Madagascar", "Mauritius",
         "Trinidad", "Tobago", "Tasmania", "Tahiti"]
 random.shuffle(ISLAND_NAMES)
+        
+# helper method to set event image and message
+def set_event(image, message):
+    global event_img, event_msg
+    event_img = "./Images/" + image + ".png"
+    event_msg = message
 
 # events that can occur on the high seas!        
 # we use a dictionary to map the randomly generated number to events
      
 def natives_attack():
-    event_img = ""
-    event_msg = ""
+    global NUM_TURNS, spices_collected
     
+    set_event("Events/attack", "The natives are hostile! You lose a turn and a random spice!")
+    NUM_TURNS -= 1
+    if len(spices_collected) > 0 :
+        spice_no = random.randint(0,len(spices_collected)-1)
+        spices_collected.pop(spice_no)
+        set_table(spice_table, spices_collected)
+     
 def natives_help():
-    event_img = ""
-    event_msg = ""
+    global NUM_TURNS, spices_collected
+    
+    set_event("Events/help", "The natives are friendly! You gain a turn and a random spice!")
+    NUM_TURNS += 1
+    spice_no = random.randint(0,len(SPICE_LIST))
+    spices_collected.append(SPICE_LIST[spice_no])
+    set_table(spice_table, spices_collected)
 
 def find_resource():
-    event_img = "" 
+    event_img = "Resources/orangutan" 
     event_msg = ""
     
 def malaria():
-    event_img = "" 
+    event_img = "Events/malaria" 
     event_msg = "" 
     
 def voc_bad():
-    event_img = "" 
+    event_img = "Events/VOC" 
     event_msg = "" 
 
 def voc_good():
-    event_img = "" 
+    event_img = "Events/VOC" 
     event_msg = "" 
 
 def typhoon():
-    event_img = "" 
+    event_img = "Events/typhoon" 
     event_msg = "" 
 
 def cyclone():
-    event_img = "" 
+    event_img = "Events/cyclone" 
     event_msg = "" 
 
 def scurvy():
-    event_img = "" 
+    event_img = "Events/scurvy" 
     event_msg = "" 
 
 def pirates():
-    event_img = "" 
+    event_img = "Events/pirates" 
     event_msg = "" 
 
 def flotsam():
-    event_img = "" 
+    event_img = "Events/flotsam" 
     event_msg = "" 
 
-def lost():
-    event_img = "" 
+def lost_at_sea():
+    event_img = "Events/lost_at_sea" 
     event_msg = "" 
 
 def treasure():
-    event_img = "" 
+    event_img = "Events/treasure" 
     event_msg = "" 
 
 def fish():
-    event_img = "" 
-    event_msg = "" 
+    event_img = "Events/fish" 
+    event_msg = ""
+
+# helper method to check if win or lose conditions have been met
+def game_over():
+    if set(winning_spices).issubset(set(spices_collected)):
+        over_msg = "You have collected all the required spices! Your riches will be told in legends for generations to come!"
+        set_event("Events/won", over_msg)
+        over_dialog = GameoverDialog()
+        over_dialog.open()
+        
+    elif NUM_TURNS == 0 or MOVES_PER_TURN == 0:
+        if MOVES_PER_TURN == 0:
+            over_msg = "You were lucky to be the last survivor of your crew. Now you are dead."
+        else:
+            over_msg = "You have run out of time. The VOC will not be pleased to hear of your failure."      
+        set_event("Events/lost", over_msg)
+        over_dialog = GameoverDialog()
+        over_dialog.open()
 
 land_events = {
     0: natives_attack,
@@ -146,8 +179,8 @@ sea_events = {
     6: voc_good,
     7: voc_good,
     8: flotsam,
-    9: lost,
-    10: lost,
+    9: lost_at_sea,
+    10: lost_at_sea,
     11: treasure,
     12: treasure,
     13: fish
@@ -190,7 +223,7 @@ class InitDialog(gui.Dialog):
         
         winit.tr()
         winit.td(gui.Label("Number of Turns"))
-        turn_slider = gui.HSlider(value=NUM_TURNS,min=15,max=75,size=32,width=175,height=16)
+        turn_slider = gui.HSlider(value=NUM_TURNS,min=2,max=75,size=32,width=175,height=16)
         winit.td(turn_slider)
         turn_slider.connect(gui.CLICK, self.adj_scroll, (0, turn_slider))
         self.turn_label = gui.Label(str(NUM_TURNS))
@@ -207,8 +240,7 @@ class InitDialog(gui.Dialog):
         winit.tr()
         okay_button = gui.Button("Okay")
         okay_button.connect(gui.CLICK,self.confirm)
-        winit.td(okay_button) # TODO: continue button to setup game
-        #winit.td(Quit())
+        winit.td(okay_button)
         
         gui.Dialog.__init__(self, title, winit)
         
@@ -234,8 +266,8 @@ class InitDialog(gui.Dialog):
 class EventDialog(gui.Dialog):
     def __init__(self,**params):
         title = gui.Label("Game Event")
-        width = 200
-        height = 100
+        #width = 200
+        #height = 100
         
         doc = gui.Document(width=400)
         space = title.style.font.size(" ")
@@ -246,6 +278,10 @@ class EventDialog(gui.Dialog):
             doc.add(gui.Label(word))
             doc.space(space)
             
+        okay_button = gui.Button("Okay")
+        okay_button.connect(gui.CLICK,self.confirm)
+        doc.add(okay_button)
+            
         gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
@@ -253,6 +289,30 @@ class EventDialog(gui.Dialog):
         update_label(moves_label, MOVES_PER_TURN)
         self.close()
 
+class GameoverDialog(gui.Dialog):
+    def __init__(self, **params):
+        title = gui.Label("Game Over")
+        
+        doc = gui.Document(width=400)
+        space = title.style.font.size(" ")
+        
+        doc.block(align=0)
+        doc.add(gui.Image(event_img),align=-1)
+        for word in event_msg.split(" "):
+            doc.add(gui.Label(word))
+            doc.space(space)
+            
+        okay_button = gui.Button("Okay")
+        okay_button.connect(gui.CLICK,self.confirm)
+        doc.add(okay_button)
+        
+        #doc.block(align=0)
+        
+        gui.Dialog.__init__(self,title,doc)
+    
+    def confirm(self):
+        self.close()        
+        
 class Island:
     def __init__(self, name, left, top):
         self.name = name
@@ -452,8 +512,8 @@ class MainGui(gui.Desktop):
         self.connect(gui.INIT, init_dialog.open, None)
         
         # only for testing purposes right now
-        event_dialog = EventDialog()
-        self.connect(gui.INIT, event_dialog.open, None)
+        #event_dialog = EventDialog()
+        #self.connect(gui.INIT, event_dialog.open, None)
         
         # Create the main game map
         self.make_game_map()
@@ -467,8 +527,7 @@ class MainGui(gui.Desktop):
         mouse_x = 0 # used to store x coordinate of mouse event
         mouse_y = 0 # used to store y coordinate of mouse event
                 
-        # only run main game loop when there is no dialog
-        while True and not dialog_on:
+        while True:
             mouse_clicked = False
             map_tile_x, map_tile_y = None, None
             self.draw_pixel_array(self.canvas)
@@ -501,7 +560,9 @@ class MainGui(gui.Desktop):
                     if nearby:
                         for island in nearby:
                             self.visit_island(island)
-            
+    
+            game_over() # check if the game is over
+    
             # Redraw the screen and wait a clock tick.
             self.repaint()
             self.loop()
@@ -529,19 +590,21 @@ class MainGui(gui.Desktop):
             accordingly, generate corresponding events, and note that this 
             island has been visited.
         """
+        
+        land_event_gen = random.randint(0,22)
+        if land_event_gen < 11 :
+            land_events[land_event_gen]()
+            print(land_event_gen)
+            event_dialog = EventDialog()
+            event_dialog.open()
+        
         if island.discovered():
             island.visit()
             
             spice_no = random.randint(0,9)
             the_spice = SPICE_LIST[spice_no]
-            if the_spice in spices_collected:
-                spices_collected[the_spice] = spices_collected[the_spice] + 1
-            else:
-                spices_collected[the_spice] = 1
-                
-            spice_list = [str(key) + " : " + str(val) \
-                    for key, val in spices_collected.items()]
-            set_table(spice_table, spice_list)
+            spices_collected.append(the_spice)
+            set_table(spice_table, spices_collected)
             
             if set(winning_spices).issubset(set(spices_collected)):
                 update_table(score_table, "You Won!")
