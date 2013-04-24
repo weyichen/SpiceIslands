@@ -24,12 +24,12 @@ SCREEN_HEIGHT = 480 # size of window's height in pixels
 MAP_WIDTH = 600 # size of map's width in pixels
 MAP_HEIGHT = 480 # size of map's height in pixels
 MARGIN = 20
-BOX_SIZE = 20 # size of box height & width in pixels
+MAP_TILE_SIZE = 20 # size of box height & width in pixels
 BG_COLOR_LEVEL = 25
-ISLAND_SIZE = 6 * BOX_SIZE # size of island bounding box height & width in pixels
+ISLAND_SIZE = 6 * MAP_TILE_SIZE # size of island bounding box height & width in pixels
 NUM_ISLANDS = 7
-MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / BOX_SIZE # number of columns of icons
-MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / BOX_SIZE # number of rows of icons
+MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / MAP_TILE_SIZE # number of columns of icons
+MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / MAP_TILE_SIZE # number of rows of icons
 # COLORS
 # NAME     (   R,   G,   B)
 OCEAN    = (  25, 135, 255)
@@ -38,29 +38,120 @@ RED      = ( 255,   0,   0)
 YELLOW   = ( 255, 255,   0)
 WHITE    = ( 255, 255, 255)
 
-# proper nouns
-SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
-        "cinnamon","pepper","cumin","camphor","fennel"]
-        
-RESOURCELIST = ["sago","rice","tempeh"]
-
-ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
-        "Bali", "Singapore", "Borneo", "Hawaii", "Madagascar", "Mauritius",
-        "Trinidad", "Tobago", "Atlantis", "Tasmania", "Tahiti"]
-        
-random.shuffle(ISLAND_NAMES)
-
 # GUI Elements that need to be updated
 spice_table = gui.List(width=150, height=100)
 score_table = gui.List(width=150, height=100)
 turns_label = gui.Label(str(NUM_TURNS))
 moves_label = gui.Label(str(MOVES_PER_TURN))
+ship_label = gui.Label(SHIP_NAME)
 
 # Variables that keep track of the state of the game
 dialog_on = False
 moves_left = MOVES_PER_TURN
 spices_collected = {}
 winning_spices = ["clove"]
+event_img = "./Images/Spices/fennel.png"
+event_msg = "You found fennel! You found fennel! You found fennel! You found fennel! You found fennel!"
+
+# proper nouns
+SPICE_LIST = ["clove","cardomom","nutmeg","mace","anise",
+        "cinnamon","pepper","cumin","camphor","fennel"]
+        
+RESOURCE_LIST = ["sago","rice","tempeh"]
+
+ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
+        "Bali", "Singapore", "Borneo", "Hawaii", "Madagascar", "Mauritius",
+        "Trinidad", "Tobago", "Atlantis", "Tasmania", "Tahiti"]
+random.shuffle(ISLAND_NAMES)
+
+# events that can occur on the high seas!        
+# we use a dictionary to map the randomly generated number to events
+     
+def natives_attack():
+    event_img = ""
+    event_msg = ""
+    
+def natives_help():
+    event_img = ""
+    event_msg = ""
+
+def find_resource():
+    event_img = "" 
+    event_msg = ""
+    
+def malaria():
+    event_img = "" 
+    event_msg = "" 
+    
+def voc_bad():
+    event_img = "" 
+    event_msg = "" 
+
+def voc_good():
+    event_img = "" 
+    event_msg = "" 
+
+def typhoon():
+    event_img = "" 
+    event_msg = "" 
+
+def cyclone():
+    event_img = "" 
+    event_msg = "" 
+
+def scurvy():
+    event_img = "" 
+    event_msg = "" 
+
+def pirates():
+    event_img = "" 
+    event_msg = "" 
+
+def flotsam():
+    event_img = "" 
+    event_msg = "" 
+
+def lost():
+    event_img = "" 
+    event_msg = "" 
+
+def treasure():
+    event_img = "" 
+    event_msg = "" 
+
+def fish():
+    event_img = "" 
+    event_msg = "" 
+
+land_events = {
+    0: natives_attack,
+    1: natives_attack,
+    2: natives_attack,
+    3: natives_help,
+    4: natives_help,
+    5: find_resource,
+    6: find_resource,
+    7: find_resource,
+    8: malaria,
+    9: voc_bad,
+    10: voc_good
+}
+sea_events = {
+    0: typhoon,
+    1: cyclone,
+    2: cyclone,
+    3: scurvy,
+    4: pirates,
+    5: pirates,
+    6: voc_good,
+    7: voc_good,
+    8: flotsam,
+    9: lost,
+    10: lost,
+    11: treasure,
+    12: treasure,
+    13: fish
+}    
 
 # Helper functions for updating labels and lists
 def update_table(element, string):
@@ -79,71 +170,89 @@ def set_table(element, strings):
 # Helper function for updating labels and lists
 def update_label(element, string):
     """ Sets the contents of the given label to the specified string """
-    element.set_text(string)
+    element.set_text(str(string))
     element.resize()
     element.repaint()
 
 # initial setup tbl
 class InitDialog(gui.Dialog):
     def __init__(self,**params):
-        title = gui.Label("Initial Game Options")
+        title = gui.Label("Setup Game Options")
         width = 200
         height = 100
-        
-        # create a form. all widgets with names are added to the form, along with their data
-        self.value = gui.Form()
         
         winit = gui.Table()
         
         winit.tr()
         winit.td(gui.Label("Name of Ship"))
-        self.name_Input = gui.Input(name="name", value="Santa Maria",size=20)
-        winit.td(self.name_Input)
+        self.name_input = gui.Input(value="Santa Maria",size=20)
+        winit.td(self.name_input)
         
         winit.tr()
         winit.td(gui.Label("Number of Turns"))
-        turn_slider = gui.HSlider(value=50,min=15,max=75,size=32,width=175,height=16)
+        turn_slider = gui.HSlider(value=NUM_TURNS,min=15,max=75,size=32,width=175,height=16)
         winit.td(turn_slider)
         turn_slider.connect(gui.CLICK, self.adj_scroll, (0, turn_slider))
-        self.turn_Input = gui.Input(name="turns", value=turn_slider.value, size=2, width=25)
-        winit.td(self.turn_Input)
+        self.turn_label = gui.Label(str(NUM_TURNS))
+        winit.td(self.turn_label)
         
         winit.tr()
         winit.td(gui.Label("Moves per Turn"))
-        move_slider = gui.HSlider(value=5,min=3,max=10,size=32,width=175,height=16)
+        move_slider = gui.HSlider(value=MOVES_PER_TURN,min=3,max=10,size=32,width=175,height=16)
         winit.td(move_slider)
         move_slider.connect(gui.CLICK, self.adj_scroll, (1, move_slider))
-        self.move_Input = gui.Input(name="moves", value=move_slider.value, size=2, width=25)
-        winit.td(self.move_Input)
+        self.move_label = gui.Label(str(MOVES_PER_TURN))
+        winit.td(self.move_label)
         
         winit.tr()
         okay_button = gui.Button("Okay")
         okay_button.connect(gui.CLICK,self.confirm)
         winit.td(okay_button) # TODO: continue button to setup game
-        winit.td(Quit())
+        #winit.td(Quit())
         
         gui.Dialog.__init__(self, title, winit)
         
+    # updates displayed values of scroll bars
     def adj_scroll(self, value):
-        """ updates displayed values of scroll bars """
         (num, slider) = value
         if num == 0:
-            self.turn_Input.value = slider.value
+            update_label(self.turn_label, str(slider.value))
         if num == 1:
-            self.move_Input.value = slider.value
+            update_label(self.move_label, str(slider.value))
+    
+    # sets values
+    def confirm(self):
+        global SHIP_NAME, NUM_TURNS, MOVES_PER_TURN
+        SHIP_NAME = self.name_input.value
+        NUM_TURNS = int(self.turn_label.value)
+        MOVES_PER_TURN = int(self.move_label.value)
+        update_label(ship_label, SHIP_NAME)
+        update_label(turns_label, NUM_TURNS)
+        update_label(moves_label, MOVES_PER_TURN)
+        self.close()
+
+class EventDialog(gui.Dialog):
+    def __init__(self,**params):
+        title = gui.Label("Game Event")
+        width = 200
+        height = 100
+        
+        doc = gui.Document(width=400)
+        space = title.style.font.size(" ")
+        
+        doc.block(align=1)
+        doc.add(gui.Image(event_img),align=-1)
+        for word in event_msg.split(" "):
+            doc.add(gui.Label(word))
+            doc.space(space)
+            
+        gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
-        """ sets values """
-        global SHIP_NAME, NUM_TURNS, MOVES_PER_TURN
-        SHIP_NAME = self.name_Input.value
-        NUM_TURNS = self.turn_Input.value
-        MOVES_PER_TURN = self.move_Input.value
-        self.send(gui.CHANGE)
-
-# code for organizing tbl is like a HTML table
-# using the tr and td methods
-# td method adds elements to container by placing it in a subcontainer, so that it will not fill the whole cell
-
+        update_label(turns_label, NUM_TURNS)
+        update_label(moves_label, MOVES_PER_TURN)
+        self.close()
+        
 
 # drawing area where the action happens
 class DrawingArea(gui.Widget):
@@ -312,7 +421,15 @@ class MainGui(gui.Desktop):
         
         # Load ship image
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
-        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (BOX_SIZE, BOX_SIZE))
+        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (MAP_TILE_SIZE, MAP_TILE_SIZE))
+        
+        # game setup dialog
+        init_dialog = InitDialog()
+        self.connect(gui.INIT, init_dialog.open, None)
+        
+        # only for testing purposes right now
+        event_dialog = EventDialog()
+        self.connect(gui.INIT, event_dialog.open, None)
         
         # Create the main game map
         self.make_game_map()
@@ -376,7 +493,7 @@ class MainGui(gui.Desktop):
                                     update_table(score_table, island)
                                     
                                     spice_no = random.randint(0,9)
-                                    the_spice = SPICELIST[spice_no]
+                                    the_spice = SPICE_LIST[spice_no]
                                     if the_spice in spices_collected:
                                         spices_collected[the_spice] = spices_collected[the_spice] + 1
                                     else:
@@ -399,7 +516,7 @@ class MainGui(gui.Desktop):
     def block_distance(self, left, top, ship_pos):
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
-        return int(np.linalg.norm(destination - current_location) / BOX_SIZE)
+        return int(np.linalg.norm(destination - current_location) / MAP_TILE_SIZE)
     
     def is_reachable(self, left, top, ship_pos, canvas):
         slice = canvas[left:left+39,top:top+39, :-1]
@@ -417,7 +534,7 @@ class MainGui(gui.Desktop):
                     (left, top) = self.map_tile_corner(map_tile_x, map_tile_y)
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
-                        box_rect = pygame.Rect(left, top, BOX_SIZE, BOX_SIZE)
+                        box_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
                         for island in self.islands:
                             island_rect = self.islands[island][1]
                             if island_rect.colliderect(box_rect):
@@ -438,13 +555,13 @@ class MainGui(gui.Desktop):
             color = RED
         
         pygame.draw.rect(self.game_area.image_buffer, color, 
-                (left - 5, top - 5, BOX_SIZE + 10, BOX_SIZE + 10), 4)
+                (left - 5, top - 5, MAP_TILE_SIZE + 10, MAP_TILE_SIZE + 10), 4)
         return
 
     def map_tile_corner(self, map_tile_x, map_tile_y):
         # Convert board coordinates to pixel coordinates
-        left = map_tile_x * BOX_SIZE + MARGIN
-        top = map_tile_y * BOX_SIZE + MARGIN
+        left = map_tile_x * MAP_TILE_SIZE + MARGIN
+        top = map_tile_y * MAP_TILE_SIZE + MARGIN
         return (left, top) 
 
     def get_map_tile_at_pixel(self, x, y):
@@ -452,7 +569,7 @@ class MainGui(gui.Desktop):
         for map_tile_x in range(MAP_COLUMNS):
             for map_tile_y in range(MAP_ROWS):
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-                box_rect = pygame.Rect(left, top, BOX_SIZE, BOX_SIZE)
+                box_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
                 if box_rect.collidepoint(x - screen_rect.x, y - screen_rect.y):
                     return (map_tile_x, map_tile_y)
         return (None, None)
