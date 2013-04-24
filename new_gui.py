@@ -24,7 +24,7 @@ WINDOWHEIGHT = 480 # size of windows' height in pixels
 MARGIN = 20
 BOXSIZE = 20 # size of box height & width in pixels
 BGCOLOR_LEVEL = 25
-ISLANDSIZE = 4 * BOXSIZE # size of island bounding box height & width in pixels
+ISLANDSIZE = 6 * BOXSIZE # size of island bounding box height & width in pixels
 BOARDWIDTH = (WINDOWWIDTH - 2 * MARGIN) / BOXSIZE # number of columns of icons
 BOARDHEIGHT = (WINDOWHEIGHT - 2 * MARGIN) / BOXSIZE # number of rows of icons
 # COLORS
@@ -166,7 +166,7 @@ class MainGui(gui.Desktop):
         self.game_area = DrawingArea(self.game_area_w,
                                     self.game_area_h)
                                     
-        menu = gui.Table(width=100, height=400, vpadding = 0, hpadding = 2, valign = -1)
+        menu = gui.Table(width=100, height=300, vpadding = 0, hpadding = 2, valign = -1)
         
         # row 1: name of ship
         menu.tr()
@@ -207,9 +207,9 @@ class MainGui(gui.Desktop):
         
         self.init(tbl, disp)
 
-        noise_w = ISLANDSIZE
-        noise_h = ISLANDSIZE
-        noise_f = 1.5
+        noise_w = ISLANDSIZE / 2
+        noise_h = ISLANDSIZE / 2
+        noise_f = 3
         noise_o = 3
         
         p = PerlinNoiseGenerator()
@@ -220,7 +220,7 @@ class MainGui(gui.Desktop):
         ship_placed = False
         self.ship_pos = None
         
-        noise = np.array(p.generate_noise(noise_w,noise_h,noise_f, noise_o))
+        noise = np.array(p.generate_noise(ISLANDSIZE, ISLANDSIZE, 1.5, 3))
         rg = np.zeros(noise.shape, dtype=np.int8)
         rg.fill(25)
         bg = np.transpose(np.array([rg, rg, noise]))
@@ -232,7 +232,7 @@ class MainGui(gui.Desktop):
         for x in range(WINDOWWIDTH / ISLANDSIZE):
             for y in range(WINDOWHEIGHT / ISLANDSIZE):
                 (left, top) = (x * ISLANDSIZE, y * ISLANDSIZE)
-                if random.randint(1,3) > 1 and (x + y) % 2 == 0:
+                if random.randint(1,3) > 1 and (x + y) % 2 == 0 and num_islands < len(ISLANDNAMES):
                     world = map.Map('Island', 
                         IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
                     world.draw_minimap()
