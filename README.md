@@ -20,12 +20,16 @@ If the destination is an accessible marine square, it is framed in yellow instea
 the ship will move to that square and the player will lose a number of remaining available moves corresponding to the distance
 traveled. Finally, if the destination is an accessible port square (on the border between an island and the ocean),
 the square is framed in green. If the player clicks on a green square, the ship will move to that location. Furthermore,
-if the player has visited this island for the first time, he or she will collect a randomly generated spice. If this spice
+if the player has visited this island for the first time, he or she may collect a randomly generated spice (unless some other
+event occurs instead; see more about random map events below). If a spice is collected and this most recently collected spice
 causes the player's spice collection to contain the desired set of spices, victory is achieved. If the player plays through
 all available turns without collecting the necessary spices, the game is over and the player loses.
 
 A sidebar on the left of the map displays a list of the spices collected so far, the quantity of spices collected, and the
 names of the islands that the player has visited. The sidebar also reports the number of remaining moves available in this
 turn, as well as the number of turns remaining in the game.
+
+A number of random events occur as the player travels around the map. Different random events can occur on the open seas 
+and while in port at an island. These events may help the player win more quickly or hinder the player's progress.
 
 For instructions on setting up and playing Spice Islands, see please see requirements.txt.
