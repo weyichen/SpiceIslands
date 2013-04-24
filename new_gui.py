@@ -296,7 +296,7 @@ class GameoverDialog(gui.Dialog):
         doc = gui.Document(width=400)
         space = title.style.font.size(" ")
         
-        doc.block(align=0)
+        doc.block(align=1)
         doc.add(gui.Image(event_img),align=-1)
         for word in event_msg.split(" "):
             doc.add(gui.Label(word))
@@ -561,7 +561,7 @@ class MainGui(gui.Desktop):
                         for island in nearby:
                             self.visit_island(island)
     
-            game_over() # check if the game is over
+                    game_over() # check if the game is over
     
             # Redraw the screen and wait a clock tick.
             self.repaint()
