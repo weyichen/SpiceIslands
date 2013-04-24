@@ -85,8 +85,8 @@ ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
         "Trinidad", "Tobago", "Tasmania", "Tahiti"]
 random.shuffle(ISLAND_NAMES)
         
-# helper method to set event image and message
 def set_event(image, message):
+    """ helper method to set event image and message """
     global event_img, event_msg
     event_img = "./Images/" + image + ".png"
     event_msg = message
@@ -231,15 +231,15 @@ def fish():
             
     moves_per_turn += 1
 
-# helper method to check if win or lose conditions have been met
 def check_game_over():
+    """ helper method to check if win or lose conditions have been met """
     global num_turns
     
     if set(winning_spices).issubset(set(spices_collected)):
         num_turns = 0
         over_msg = "You have collected all the required spices! Your riches will be told in legends for generations to come!"
         set_event("Events/won", over_msg)
-        over_dialog = GameoverDialog()
+        over_dialog = GameOverDialog()
         over_dialog.open()
         return true
         
@@ -250,7 +250,7 @@ def check_game_over():
         else:
             over_msg = "You have run out of time. The VOC will not be pleased to hear of your failure."      
         set_event("Events/lost", over_msg)
-        over_dialog = GameoverDialog()
+        over_dialog = GameOverDialog()
         over_dialog.open()
         return true
 
@@ -307,6 +307,7 @@ def update_label(element, string):
 
 # initial setup tbl
 class InitDialog(gui.Dialog):
+    """ Dialog that displays when game loads to allow user to choose parameters."""
     def __init__(self,**params):
         dialog_on = True
         title = gui.Label("Setup Game Options")
@@ -343,16 +344,16 @@ class InitDialog(gui.Dialog):
         
         gui.Dialog.__init__(self, title, winit)
         
-    # updates displayed values of scroll bars
     def adj_scroll(self, value):
+        """ updates displayed values of scroll bars """
         (num, slider) = value
         if num == 0:
             update_label(self.turn_label, str(slider.value))
         if num == 1:
             update_label(self.move_label, str(slider.value))
     
-    # sets values
     def confirm(self):
+        """ sets values and exits """
         global SHIP_NAME, num_turns, moves_per_turn
         SHIP_NAME = self.name_input.value
         num_turns = int(self.turn_label.value)
@@ -364,6 +365,7 @@ class InitDialog(gui.Dialog):
         self.close()
 
 class EventDialog(gui.Dialog):
+    """ Dialogs that display when random events occur."""
     def __init__(self,**params):
         dialog_on = True
         title = gui.Label("Game Event")
@@ -386,12 +388,14 @@ class EventDialog(gui.Dialog):
         gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
+        """ sets values and exits """
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
         dialog_on = False
         self.close()
 
-class GameoverDialog(gui.Dialog):
+class GameOverDialog(gui.Dialog):
+    """ Dialogs that display when the game ends, one way or another. """
     def __init__(self, **params):
         dialog_on = True
         title = gui.Label("Game Over")
@@ -414,16 +418,19 @@ class GameoverDialog(gui.Dialog):
         gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
+        """ sets values and exits """
         dialog_on = False
         self.close()        
         
 class Island:
+    """ An object that represents a single island on the map. """
     def __init__(self, name, loc):
         self.name = name
         self.area = pygame.Rect(loc, ISLAND_SIZE)
         self.visited = False
         
     def discovered(self):
+        """ Has this island been newly discovered on this trip? """
         return not self.visited
         
     def get_name(self):
@@ -433,10 +440,12 @@ class Island:
         return self.area
         
     def contains(self, loc):
+        """ Does this island's landmass encompass the coordinates in question? """
         tile_rect = pygame.Rect(loc, MAP_TILE_SIZE)
         return self.area.colliderect(tile_rect)
         
     def visit(self):
+        """ Record a visit to this island by the player. """
         self.visited = True
         update_table(score_table, self.name)
     
@@ -449,7 +458,7 @@ class DrawingArea(gui.Widget):
         self.image_buffer = pygame.Surface((width, height))
 
     def paint(self, surf):
-        # Paint whatever has been captured in the buffer
+        """ Paint whatever has been captured in the buffer """
         surf.blit(self.image_buffer, (0, 0))
         
 class MainGui(gui.Desktop):
