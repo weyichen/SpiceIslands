@@ -15,6 +15,7 @@ Imported Standard Library modules
 random
 sys
 os
+Queue
 
 Additional modules
 ------------------

@@ -5,7 +5,7 @@ import map
 from perlin_noise import *
 from island_generator import *
 import numpy as np
-import time
+import Queue
 
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
@@ -60,16 +60,17 @@ YELLOW   = ( 255, 255,   0)
 WHITE    = ( 255, 255, 255)
 
 # GUI Elements that need to be updated
-spice_table = gui.List(width=175, height=100)
-spice_win_table = gui.List(width=175, height=100)
-resources_table = gui.List(width=175, height=100)
-islands_table = gui.List(width=175, height=100)
+spice_table = gui.List(width=125, height=100)
+spice_win_table = gui.List(width=125, height=100)
+resources_table = gui.List(width=125, height=100)
+islands_table = gui.List(width=125, height=100)
 turns_label = gui.Label(str(num_turns))
 moves_label = gui.Label(str(moves_per_turn))
 ship_label = gui.Label(ship_name)
 
 # Variables that keep track of the state of the game
 dialog_on = False
+dialog_q = Queue.LifoQueue()
 moves_left = moves_per_turn
 spices_collected = []
 resources_collected = []
@@ -89,12 +90,12 @@ random.shuffle(ISLAND_NAMES)
         
 def set_event(image, message):
     """ helper method to set event image and message """
-    global event_img, event_msg
+    global event_img, event_msg, dialog_q
     event_img = "./Images/" + image + ".png"
     event_msg = message
     
     event_dialog = EventDialog()
-    event_dialog.open()
+    dialog_q.put(event_dialog)
 
 # events that can occur on the high seas!        
 # we use a dictionary to map the randomly generated number to events
@@ -235,15 +236,14 @@ def fish():
 
 def check_game_over():
     """ helper method to check if win or lose conditions have been met """
-    global num_turns
+    global num_turns, dialog_q
     
     if set(winning_spices).issubset(set(spices_collected)):
         num_turns = 0
         over_msg = "You have collected all the required spices! Your riches will be told in legends for generations to come!"
         set_event("Events/won", over_msg)
         over_dialog = GameOverDialog()
-        over_dialog.open()
-        return true
+        dialog_q.put(over_dialog)
         
     if num_turns == 0 or moves_per_turn == 0:
         if moves_per_turn == 0:
@@ -253,8 +253,7 @@ def check_game_over():
             over_msg = "You have run out of time. The VOC will not be pleased to hear of your failure."      
         set_event("Events/lost", over_msg)
         over_dialog = GameOverDialog()
-        over_dialog.open()
-        return true
+        dialog_q.put(over_dialog)
 
 land_events = {
     0: natives_attack,
@@ -311,6 +310,7 @@ def update_label(element, string):
 class InitDialog(gui.Dialog):
     """ Dialog that displays when game loads to allow user to choose parameters."""
     def __init__(self,**params):
+        global dialog_on
         dialog_on = True
         title = gui.Label("Setup Game Options")
         width = 200
@@ -356,7 +356,7 @@ class InitDialog(gui.Dialog):
     
     def confirm(self):
         """ sets values and exits """
-        global ship_name, num_turns, moves_per_turn
+        global ship_name, num_turns, moves_per_turn, dialog_on
         ship_name = str(self.name_input.value)
         num_turns = int(self.turn_label.value)
         moves_per_turn = int(self.move_label.value)
@@ -369,6 +369,7 @@ class InitDialog(gui.Dialog):
 class EventDialog(gui.Dialog):
     """ Dialogs that display when random events occur."""
     def __init__(self,**params):
+        global dialog_on
         dialog_on = True
         title = gui.Label("Game Event")
         #width = 200
@@ -391,6 +392,7 @@ class EventDialog(gui.Dialog):
     
     def confirm(self):
         """ sets values and exits """
+        global dialog_on
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
         dialog_on = False
@@ -399,6 +401,7 @@ class EventDialog(gui.Dialog):
 class GameOverDialog(gui.Dialog):
     """ Dialogs that display when the game ends, one way or another. """
     def __init__(self, **params):
+        global dialog_on
         dialog_on = True
         title = gui.Label("Game Over")
         
@@ -421,6 +424,7 @@ class GameOverDialog(gui.Dialog):
     
     def confirm(self):
         """ sets values and exits """
+        global dialog_on
         dialog_on = False
         self.close()        
         
@@ -641,7 +645,7 @@ class MainGui(gui.Desktop):
         self.make_game_map()
 
     def run(self):
-        global moves_left
+        global moves_left, dialog_q
         screen_rect = self.get_map_area()
         
         self.init()
@@ -654,6 +658,10 @@ class MainGui(gui.Desktop):
             map_tile_x, map_tile_y = None, None
             self.draw_pixel_array(self.canvas)
             self.draw_surface(self.ship_img, self.ship_pos)
+            while not dialog_q.empty():
+                dialog = dialog_q.get()
+                dialog.open()
+            pygame.display.update()
             
             for event in pygame.event.get(): # event handling loop
                 self.event(event)
@@ -666,31 +674,30 @@ class MainGui(gui.Desktop):
                     # only get map position if we clicked inside map
                     screen_rect = self.get_map_area()
                     mouse_x, mouse_y = event.pos
-                    if mouse_x > screen_rect.x:
+                    if mouse_x > screen_rect.x and not dialog_on:
                         mouse_clicked = True
             
-            if not dialog_on:
-                map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-                if map_tile_x != None and map_tile_y != None and num_turns > 0:
-                    # The mouse is currently over a box.
-                    self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
-                    left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-                    if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
-                        # The player has successfully executed a move
-                        self.move_ship(left, top)
-                        # Report spices collected and update visited islands list
-                        nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
-                        if nearby:
-                            for island in nearby:
-                                self.visit_island(island)
-                        else :
-                            sea_event_gen = random.randint(0,42)
-                            num_resources = len(resources_collected)
-        
-                            if sea_event_gen < 14 :
-                                sea_events[sea_event_gen]()
-        
-                        check_game_over() # check if the game is over
+            map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
+            if map_tile_x != None and map_tile_y != None and not dialog_on and num_turns > 0:
+                # The mouse is currently over a box.
+                self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
+                left, top = self.map_tile_corner(map_tile_x, map_tile_y)
+                if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
+                    # The player has successfully executed a move
+                    self.move_ship(left, top)
+                    # Report spices collected and update visited islands list
+                    nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
+                    if nearby:
+                        for island in nearby:
+                            self.visit_island(island)
+                    else :
+                        sea_event_gen = random.randint(0,42)
+                        num_resources = len(resources_collected)
+    
+                        if sea_event_gen < 14 :
+                            sea_events[sea_event_gen]()
+    
+                    check_game_over() # check if the game is over
     
             # Redraw the screen and wait a clock tick.
             self.repaint()
@@ -726,7 +733,7 @@ class MainGui(gui.Desktop):
         if land_event_gen < 11 :
             land_events[land_event_gen]()
             
-        elif island.discovered():
+        if island.discovered():
             island.visit()
             
             spice_no = random.randint(0,9)
@@ -736,7 +743,7 @@ class MainGui(gui.Desktop):
             spices_collected.append(the_spice)
             set_table(spice_table, spices_collected)
                     
-        elif (num_resources):
+        if (num_resources):
             if "treasure" in resources_collected:
                 resources_collected.remove("treasure")
                 
