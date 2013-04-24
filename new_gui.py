@@ -57,7 +57,7 @@ event_msg = "You found fennel! You found fennel! You found fennel! You found fen
 SPICE_LIST = ["clove","cardomom","nutmeg","mace","anise",
         "cinnamon","pepper","cumin","camphor","fennel"]
         
-RESOURCE_LIST = ["sago","rice","tempeh"]
+RESOURCE_LIST = ["sago","rice","tempeh","orangutan","guilders","cloth","wood"]
 
 ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
         "Bali", "Singapore", "Borneo", "Hawaii", "Madagascar", "Mauritius",
