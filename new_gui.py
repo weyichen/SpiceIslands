@@ -223,12 +223,16 @@ class MainGui(gui.Desktop):
         island_minimaps = self.make_island_minimaps()
         water = self.make_ocean_surface()
         
-        print num_rows, num_cols
-        for x in range(num_cols):
-            for y in range(num_rows):
+        # Randomize order of map building to randomize initial ship position
+        cols = range(num_cols)
+        rows = range(num_rows)
+        random.shuffle(cols)
+        random.shuffle(rows)
+        
+        for x in cols:
+            for y in rows:
                 (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
                 if (x, y) in island_positions:
-                    print (x, y, x + y * num_cols)
                     # Draw island on map
                     minimap = island_minimaps[island_number]
                     self.draw_surface(minimap, (left, top))
