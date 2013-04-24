@@ -252,7 +252,30 @@ class EventDialog(gui.Dialog):
         update_label(turns_label, NUM_TURNS)
         update_label(moves_label, MOVES_PER_TURN)
         self.close()
+
+class Island:
+    def __init__(self, name, left, top):
+        self.name = name
+        self.area = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
+        self.visited = False
         
+    def discovered(self):
+        return not self.visited
+        
+    def get_name(self):
+        return self.name
+        
+    def get_area(self):
+        return self.area
+        
+    def contains(self, left, top):
+        tile_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
+        return self.area.colliderect(tile_rect)
+        
+    def visit(self):
+        self.visited = True
+        update_table(score_table, self.name)
+    
 
 # drawing area where the action happens
 class DrawingArea(gui.Widget):
@@ -321,7 +344,7 @@ class MainGui(gui.Desktop):
         """ Generate a random game map and initialize the display """
         ship_placed = False
         self.ship_pos = None
-        self.islands = {}
+        self.islands = []
         
         island_number = 0
         num_cols = MAP_WIDTH / ISLAND_SIZE
@@ -347,11 +370,9 @@ class MainGui(gui.Desktop):
                     # Draw island on map
                     minimap = island_minimaps[island_number]
                     self.draw_surface(minimap, (left, top))
-                    # Store island in dictionary
+                    # Create and store an island object
                     island_name = ISLAND_NAMES[island_number]
-                    visited = False
-                    island_rect = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
-                    self.islands[island_name] = (visited, island_rect)
+                    self.islands.append(Island(island_name, left, top))
                     island_number += 1
                 else:
                     # Draw ocean where there are no islands
@@ -474,7 +495,7 @@ class MainGui(gui.Desktop):
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
                 if self.is_reachable(left, top, self.ship_pos, self.canvas) and mouse_clicked:
                     # The user has successfully executed a move
-                    move_ship(left, top)
+                    self.move_ship(left, top)
                     # Report spices collected and update visited islands list
                     nearby = self.nearby_islands(map_tile_x, map_tile_y, self.canvas)
                     if nearby:
@@ -490,6 +511,7 @@ class MainGui(gui.Desktop):
         """ Move the ship to the specified destination, redraw the display,
             and adjust the moves and turns remaining accordingly.
         """
+        global moves_left, NUM_TURNS
         # decrement number of moves by the distance traveled
         moves_left-= self.block_distance(left, top, self.ship_pos)
         # decrement number of turns
@@ -507,11 +529,8 @@ class MainGui(gui.Desktop):
             accordingly, generate corresponding events, and note that this 
             island has been visited.
         """
-        info = self.islands[island]
-        visited = info[0]
-        island_rect = info[1]
-        if not visited:
-            update_table(score_table, island)
+        if island.discovered():
+            island.visit()
             
             spice_no = random.randint(0,9)
             the_spice = SPICE_LIST[spice_no]
@@ -523,9 +542,6 @@ class MainGui(gui.Desktop):
             spice_list = [str(key) + " : " + str(val) \
                     for key, val in spices_collected.items()]
             set_table(spice_table, spice_list)
-            
-            # Mark as visited
-            self.islands[island] = (True, island_rect)
             
             if set(winning_spices).issubset(set(spices_collected)) or island == "Atlantis":
                 update_table(score_table, "You Won!")
@@ -562,10 +578,8 @@ class MainGui(gui.Desktop):
                     (left, top) = self.map_tile_corner(map_tile_x, map_tile_y)
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
-                        box_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
                         for island in self.islands:
-                            island_rect = self.islands[island][1]
-                            if island_rect.colliderect(box_rect):
+                            if island.contains(left, top):
                                 islands_here.append(island)
         return islands_here
     
