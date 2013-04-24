@@ -5,31 +5,50 @@ import map
 from perlin_noise import *
 from island_generator import *
 import numpy as np
+
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
 from pgu import gui # TODO: figure out how to install pgu
-
-# GUI debugging mode: do not generate map
-gui_debug = True
 
 # global variable settings
 SHIP_NAME = "SANTA MARIA"
 NUM_TURNS = 30
 MOVES_PER_TURN = 3
 
-# Graphical Parameters for Game Map
-FPS = 30 # frames per second, the general speed of the program
+""" Graphical Parameters for Game Map """
+
+# Display Scaling Factors
 SCREEN_WIDTH = 850 # size of window's width in pixels
 SCREEN_HEIGHT = 480 # size of window's height in pixels
+SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
 MAP_WIDTH = 600 # size of map's width in pixels
 MAP_HEIGHT = 480 # size of map's height in pixels
+MAP_SIZE = (MAP_WIDTH, MAP_HEIGHT)
+MAP_TILE_WIDTH = 20 # size of map tile's width in pixels
+MAP_TILE_HEIGHT = 20 # size of map tile's height in pixels
+MAP_TILE_SIZE = (MAP_TILE_WIDTH, MAP_TILE_HEIGHT)
+ISLAND_WIDTH = 6 * MAP_TILE_WIDTH # size of island bounding box height & width in pixels
+ISLAND_HEIGHT = 6 * MAP_TILE_HEIGHT # size of island bounding box height & width in pixels
+ISLAND_SIZE = (ISLAND_WIDTH, ISLAND_HEIGHT)
+
+# Other scale constants
 MARGIN = 20
-MAP_TILE_SIZE = 20 # size of box height & width in pixels
+MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / MAP_TILE_WIDTH # number of columns of icons
+MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / MAP_TILE_HEIGHT # number of rows of icons
+
+# Non-scaling constants
+FPS = 30 # frames per second, the general speed of the program
 BG_COLOR_LEVEL = 25
-ISLAND_SIZE = 6 * MAP_TILE_SIZE # size of island bounding box height & width in pixels
 NUM_ISLANDS = 7
-MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / MAP_TILE_SIZE # number of columns of icons
-MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / MAP_TILE_SIZE # number of rows of icons
+
+# Very basic quality control on constant parameters
+assert MAP_WIDTH <= SCREEN_WIDTH
+assert MAP_HEIGHT <= SCREEN_HEIGHT
+assert MAP_TILE_WIDTH <= ISLAND_WIDTH
+assert MAP_TILE_HEIGHT <= ISLAND_HEIGHT
+assert MAP_COLUMNS >= 10
+assert MAP_ROWS >= 10
+
 # COLORS
 # NAME     (   R,   G,   B)
 OCEAN    = (  25, 135, 255)
@@ -151,7 +170,7 @@ sea_events = {
     11: treasure,
     12: treasure,
     13: fish
-}    
+}
 
 # Helper functions for updating labels and lists
 def update_table(element, string):
@@ -254,12 +273,15 @@ class EventDialog(gui.Dialog):
         self.close()
 
 class Island:
-    def __init__(self, name, left, top):
+    def __init__(self, name, loc):
         self.name = name
-        self.area = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
+        self.area = pygame.Rect(loc, ISLAND_SIZE)
         self.visited = False
+        # Ensure valid island naming
+        assert self.name != None
         
     def discovered(self):
+        """ Has this island been newly discovered on this trip? """
         return not self.visited
         
     def get_name(self):
@@ -268,11 +290,13 @@ class Island:
     def get_area(self):
         return self.area
         
-    def contains(self, left, top):
-        tile_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
+    def contains(self, loc):
+        """ Does this island encompass the coordinates in question? """
+        tile_rect = pygame.Rect(loc, MAP_TILE_SIZE)
         return self.area.colliderect(tile_rect)
         
     def visit(self):
+        """ Update internal state to reflect player's visit to this island """
         self.visited = True
         update_table(score_table, self.name)
     
@@ -290,14 +314,11 @@ class DrawingArea(gui.Widget):
         
 class MainGui(gui.Desktop):
     """ The main GUI wrapper for our game """
-    game_area_w = MAP_WIDTH
-    game_area_h = MAP_HEIGHT
-    game_area = None
 
     def make_island_minimaps(self):
         """ Use the island generator to create island minimaps for the game map """
-        noise_w = ISLAND_SIZE / 2
-        noise_h = ISLAND_SIZE / 2
+        noise_w = ISLAND_WIDTH / 2
+        noise_h = ISLAND_HEIGHT / 2
         noise_f = 3
         noise_o = 3
         minimaps = []
@@ -306,12 +327,14 @@ class MainGui(gui.Desktop):
                     IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
             world.draw_minimap()
             minimaps.append(world.minimap)
+        # Make sure the number of island minimaps is correct
+        assert len(minimaps) == NUM_ISLANDS
         return minimaps
         
     def make_ocean_surface(self):
         """ Create a smooth-looking ocean surface image using varying intensities of blue """
         p = PerlinNoiseGenerator()
-        blue_values = np.array(p.generate_noise(ISLAND_SIZE, ISLAND_SIZE, 1.5, 3))
+        blue_values = np.array(p.generate_noise(ISLAND_WIDTH, ISLAND_HEIGHT, 1.5, 3))
         red_green_values = np.zeros(blue_values.shape, dtype=np.int8)
         red_green_values.fill(25)
         rgb = np.transpose(np.array([red_green_values, red_green_values, blue_values]))
@@ -338,6 +361,8 @@ class MainGui(gui.Desktop):
                     free += 1
             if free == len(island_positions):
                 clustered = False
+        # Ensure we have placed the right number of islands
+        assert len(island_positions) == NUM_ISLANDS
         return island_positions
         
     def make_game_map(self):
@@ -347,8 +372,12 @@ class MainGui(gui.Desktop):
         self.islands = []
         
         island_number = 0
-        num_cols = MAP_WIDTH / ISLAND_SIZE
-        num_rows = MAP_HEIGHT / ISLAND_SIZE
+        num_cols = MAP_WIDTH / ISLAND_WIDTH
+        num_rows = MAP_HEIGHT / ISLAND_HEIGHT
+        
+        # Ensure the map is big enough
+        assert num_cols >= 2
+        assert num_rows >= 2
         
         # Pick the desired number of island locations such that no two are adjacent
         island_positions = self.spread_islands(num_cols, num_rows)
@@ -365,29 +394,35 @@ class MainGui(gui.Desktop):
         
         for x in cols:
             for y in rows:
-                (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
+                location = x * ISLAND_WIDTH, y * ISLAND_HEIGHT
                 if (x, y) in island_positions:
                     # Draw island on map
                     minimap = island_minimaps[island_number]
-                    self.draw_surface(minimap, (left, top))
+                    self.draw_surface(minimap, location)
                     # Create and store an island object
                     island_name = ISLAND_NAMES[island_number]
-                    self.islands.append(Island(island_name, left, top))
+                    self.islands.append(Island(island_name, location))
                     island_number += 1
                 else:
                     # Draw ocean where there are no islands
-                    self.draw_surface(water, (left, top))
+                    self.draw_surface(water, location)
                     if not ship_placed:
+                        left, top = location
                         self.ship_pos = (left + MARGIN, top + MARGIN)
                         ship_placed = True
-                        
+        
+        # Make sure we have the right number of islands and the ship is on the map
+        assert island_number == NUM_ISLANDS
+        assert ship_placed
         # Capture initial map layout for future redrawing
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
         
     def load_splashscreen(self, display):
         """ Display a splashscreen while the main game is loading """
         raw_splash_img = pygame.image.load(os.path.join('Images', 'splash.png'))
-        splash_img = pygame.transform.smoothscale(raw_splash_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        splash_img = pygame.transform.smoothscale(raw_splash_img, SCREEN_SIZE)
+        # Check for correct resizing
+        assert splash_img.get_size() == SCREEN_SIZE
         display.blit(splash_img, (0, 0))
         pygame.display.update()
         
@@ -433,7 +468,7 @@ class MainGui(gui.Desktop):
         self.load_splashscreen(disp)
 
         # Setup the 'game' area where the action takes place and a sidebar for the menu
-        self.game_area = DrawingArea(self.game_area_w, self.game_area_h)
+        self.game_area = DrawingArea(MAP_WIDTH, MAP_HEIGHT)
         menu = self.make_menu_sidebar()
         
         # set up the overall layout
@@ -445,7 +480,9 @@ class MainGui(gui.Desktop):
         
         # Load ship image
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
-        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (MAP_TILE_SIZE, MAP_TILE_SIZE))
+        self.ship_img = pygame.transform.smoothscale(raw_ship_img, MAP_TILE_SIZE)
+        # Check for correct resizing
+        assert self.ship_img.get_size() == MAP_TILE_SIZE
         
         # game setup dialog
         init_dialog = InitDialog()
@@ -552,7 +589,7 @@ class MainGui(gui.Desktop):
         """
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
-        return int(np.linalg.norm(destination - current_location) / MAP_TILE_SIZE)
+        return int(np.linalg.norm(destination - current_location) / np.linalg.norm(np.array(MAP_TILE_SIZE)))
     
     def is_reachable(self, left, top, ship_pos, canvas):
         """ Determine whether or not the user's intended destination
@@ -579,7 +616,7 @@ class MainGui(gui.Desktop):
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
                         for island in self.islands:
-                            if island.contains(left, top):
+                            if island.contains((left, top)):
                                 islands_here.append(island)
         return islands_here
     
@@ -601,7 +638,7 @@ class MainGui(gui.Desktop):
             color = RED
         
         pygame.draw.rect(self.game_area.image_buffer, color, 
-                (left - 5, top - 5, MAP_TILE_SIZE + 10, MAP_TILE_SIZE + 10), 4)
+                (left - 5, top - 5, MAP_TILE_WIDTH + 10, MAP_TILE_HEIGHT + 10), 4)
         return
 
     def map_tile_corner(self, map_tile_x, map_tile_y):
@@ -609,8 +646,8 @@ class MainGui(gui.Desktop):
             specified tile of the game map.
         """
         # Convert board coordinates to pixel coordinates
-        left = map_tile_x * MAP_TILE_SIZE + MARGIN
-        top = map_tile_y * MAP_TILE_SIZE + MARGIN
+        left = map_tile_x * MAP_TILE_WIDTH + MARGIN
+        top = map_tile_y * MAP_TILE_HEIGHT + MARGIN
         return (left, top) 
 
     def get_map_tile_at_pixel(self, x, y):
@@ -621,7 +658,7 @@ class MainGui(gui.Desktop):
         for map_tile_x in range(MAP_COLUMNS):
             for map_tile_y in range(MAP_ROWS):
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-                box_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
+                box_rect = pygame.Rect(left, top, MAP_TILE_WIDTH, MAP_TILE_HEIGHT)
                 if box_rect.collidepoint(x - screen_rect.x, y - screen_rect.y):
                     return (map_tile_x, map_tile_y)
         return (None, None)
@@ -640,7 +677,7 @@ class MainGui(gui.Desktop):
 
 def main():
     pygame.init()
-    disp = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    disp = pygame.display.set_mode(SCREEN_SIZE)
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
