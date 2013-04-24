@@ -13,6 +13,7 @@ The ship can only move a few squares at a time. There is a limit on the number o
 number of moves that the player can make per turn.
 
 When the player's mouse hovers over a square on the map, that square is evaluated as a potential travel destinnation.
+The square is framed in white if it is the current position of the ship. Clicking on this square does nothing.
 The square is framed in red if it is inaccessible because it is too far away from the ship or is landlocked 
 (the ship cannot enter the interior of islands). If the player clicks on a red square, nothing happens.
 If the destination is an accessible marine square, it is framed in yellow instead. If the player clicks on a yellow square,

@@ -13,18 +13,21 @@ from pgu import gui # TODO: figure out how to install pgu
 gui_debug = True
 
 # global variable settings
-SHIPNAME = "SANTA MARIA"
-NUMTURNS = 30
-MOVESPTURN = 3
+SHIP_NAME = "SANTA MARIA"
+NUM_TURNS = 30
+MOVES_PER_TURN = 3
 
 # Graphical Parameters for Game Map
 FPS = 30 # frames per second, the general speed of the program
-MAP_WIDTH = 640 # size of window's width in pixels
-MAP_HEIGHT = 480 # size of windows' height in pixels
+SCREEN_WIDTH = 850 # size of window's width in pixels
+SCREEN_HEIGHT = 480 # size of window's height in pixels
+MAP_WIDTH = 600 # size of map's width in pixels
+MAP_HEIGHT = 480 # size of map's height in pixels
 MARGIN = 20
 BOX_SIZE = 20 # size of box height & width in pixels
 BG_COLOR_LEVEL = 25
 ISLAND_SIZE = 6 * BOX_SIZE # size of island bounding box height & width in pixels
+NUM_ISLANDS = 7
 MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / BOX_SIZE # number of columns of icons
 MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / BOX_SIZE # number of rows of icons
 # COLORS
@@ -32,7 +35,8 @@ MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / BOX_SIZE # number of rows of icons
 OCEAN    = (  25, 135, 255)
 GREEN    = (   0, 255,  85)
 RED      = ( 255,   0,   0)
-YELLOW   = ( 255, 255,  0)
+YELLOW   = ( 255, 255,   0)
+WHITE    = ( 255, 255, 255)
 
 # proper nouns
 SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
@@ -40,29 +44,33 @@ SPICELIST = ["clove","cardomom","nutmeg","mace","anise",
         
 RESOURCELIST = ["sago","rice","tempeh"]
 
-ISLANDNAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
+ISLAND_NAMES = ["Sumatra","Java","Sulawesi","Quezon","New Guinea",
         "Bali", "Singapore", "Borneo", "Hawaii", "Madagascar", "Mauritius",
         "Trinidad", "Tobago", "Atlantis", "Tasmania", "Tahiti"]
+        
+random.shuffle(ISLAND_NAMES)
 
 # GUI Elements that need to be updated
 spice_table = gui.List(width=150, height=100)
 score_table = gui.List(width=150, height=100)
-turns_label = gui.Label(str(NUMTURNS))
-moves_label = gui.Label(str(MOVESPTURN))
+turns_label = gui.Label(str(NUM_TURNS))
+moves_label = gui.Label(str(MOVES_PER_TURN))
 
 # Variables that keep track of the state of the game
 dialog_on = False
-moves_left = MOVESPTURN
+moves_left = MOVES_PER_TURN
 spices_collected = {}
 winning_spices = ["clove"]
 
 # Helper functions for updating labels and lists
 def update_table(element, string):
+    """ Adds the specified string to the given GUI table """
     element.add(string)
     element.resize()
     element.repaint()
    
 def set_table(element, strings):
+    """ Sets the contents of the given GUI table to the specified list of strings """
     element.clear()
     for string in strings:
         element.add(string)
@@ -70,6 +78,7 @@ def set_table(element, strings):
     
 # Helper function for updating labels and lists
 def update_label(element, string):
+    """ Sets the contents of the given label to the specified string """
     element.set_text(string)
     element.resize()
     element.repaint()
@@ -115,20 +124,20 @@ class InitDialog(gui.Dialog):
         
         gui.Dialog.__init__(self, title, winit)
         
-    # updates displayed values of scroll bars
     def adj_scroll(self, value):
+        """ updates displayed values of scroll bars """
         (num, slider) = value
         if num == 0:
             self.turn_Input.value = slider.value
         if num == 1:
             self.move_Input.value = slider.value
     
-    # sets values
     def confirm(self):
-        global SHIPNAME, NUMTURNS, MOVESPTURN
-        SHIPNAME = self.name_Input.value
-        NUMTURNS = self.turn_Input.value
-        MOVESPTURN = self.move_Input.value
+        """ sets values """
+        global SHIP_NAME, NUM_TURNS, MOVES_PER_TURN
+        SHIP_NAME = self.name_Input.value
+        NUM_TURNS = self.turn_Input.value
+        MOVES_PER_TURN = self.move_Input.value
         self.send(gui.CHANGE)
 
 # code for organizing tbl is like a HTML table
@@ -147,10 +156,56 @@ class DrawingArea(gui.Widget):
         surf.blit(self.image_buffer, (0, 0))
         
 class MainGui(gui.Desktop):
-    game_area_w = 480
-    game_area_h = 640
+    game_area_w = MAP_WIDTH
+    game_area_h = MAP_HEIGHT
     game_area = None
 
+    def make_island_minimaps(self):
+        """ Use the island generator to create island minimaps for the game map """
+        noise_w = ISLAND_SIZE / 2
+        noise_h = ISLAND_SIZE / 2
+        noise_f = 3
+        noise_o = 3
+        minimaps = []
+        for _ in range(NUM_ISLANDS):
+            world = map.Map('Island', 
+                    IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
+            world.draw_minimap()
+            minimaps.append(world.minimap)
+        return minimaps
+        
+    def make_ocean_surface(self):
+        """ Create a smooth-looking ocean surface image using varying intensities of blue """
+        p = PerlinNoiseGenerator()
+        blue_values = np.array(p.generate_noise(ISLAND_SIZE, ISLAND_SIZE, 1.5, 3))
+        red_green_values = np.zeros(blue_values.shape, dtype=np.int8)
+        red_green_values.fill(25)
+        rgb = np.transpose(np.array([red_green_values, red_green_values, blue_values]))
+        water = pygame.surfarray.make_surface(rgb)
+        return water
+        
+    def spread_islands(self, num_cols, num_rows):
+        """ Pick the desired number of island locations
+            such that no two are adjacent
+        """
+        options = [(x,y) for x in range(num_cols) for y in range(num_rows)]
+        clustered = True
+        while clustered:
+            random.shuffle(options)
+            island_positions = options[:NUM_ISLANDS]
+            
+            free = 0
+            for pos in island_positions:
+                x, y = pos
+                if (x - 1, y) not in island_positions and \
+                    (x + 1, y) not in island_positions and \
+                    (x, y - 1) not in island_positions and \
+                    (x, y + 1) not in island_positions:
+                    free += 1
+            if free == len(island_positions):
+                clustered = False
+        return island_positions
+    
     def __init__(self, disp):
         gui.Desktop.__init__(self)
         
@@ -158,7 +213,7 @@ class MainGui(gui.Desktop):
         
         # Display splashscreen while loading
         raw_splash_img = pygame.image.load(os.path.join('Images', 'splash.png'))
-        splash_img = pygame.transform.smoothscale(raw_splash_img, (800, 480))
+        splash_img = pygame.transform.smoothscale(raw_splash_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
         disp.blit(splash_img, (0, 0))
         pygame.display.update()
 
@@ -170,7 +225,7 @@ class MainGui(gui.Desktop):
         
         # row 1: name of ship
         menu.tr()
-        name_label = gui.Label(SHIPNAME)
+        name_label = gui.Label(SHIP_NAME)
         menu.td(name_label)
         
         # sidebar row 1: spices and resources table
@@ -206,13 +261,6 @@ class MainGui(gui.Desktop):
         tbl.td(self.game_area)
         
         self.init(tbl, disp)
-
-        noise_w = ISLAND_SIZE / 2
-        noise_h = ISLAND_SIZE / 2
-        noise_f = 3
-        noise_o = 3
-        
-        p = PerlinNoiseGenerator()
         
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
         self.ship_img = pygame.transform.smoothscale(raw_ship_img, (BOX_SIZE, BOX_SIZE))
@@ -220,27 +268,35 @@ class MainGui(gui.Desktop):
         ship_placed = False
         self.ship_pos = None
         
-        noise = np.array(p.generate_noise(ISLAND_SIZE, ISLAND_SIZE, 1.5, 3))
-        rg = np.zeros(noise.shape, dtype=np.int8)
-        rg.fill(25)
-        bg = np.transpose(np.array([rg, rg, noise]))
-        water = pygame.surfarray.make_surface(bg)
-        
         self.islands = {}
-        num_islands = 0
+        island_number = 0
         
-        for x in range(MAP_WIDTH / ISLAND_SIZE):
-            for y in range(MAP_HEIGHT / ISLAND_SIZE):
+        num_cols = MAP_WIDTH / ISLAND_SIZE
+        num_rows = MAP_HEIGHT / ISLAND_SIZE
+        
+        # Pick the desired number of island locations such that no two are adjacent
+        island_positions = self.spread_islands(num_cols, num_rows)
+        
+        island_minimaps = self.make_island_minimaps()
+        water = self.make_ocean_surface()
+        
+        print num_rows, num_cols
+        for x in range(num_cols):
+            for y in range(num_rows):
                 (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
-                if random.randint(1,3) > 1 and (x + y) % 2 == 0 and num_islands < len(ISLANDNAMES):
-                    world = map.Map('Island', 
-                        IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
-                    world.draw_minimap()
-                    self.draw_surface(world.minimap, (left, top))
+                if (x, y) in island_positions:
+                    print (x, y, x + y * num_cols)
+                    # Draw island on map
+                    minimap = island_minimaps[island_number]
+                    self.draw_surface(minimap, (left, top))
+                    # Store island in dictionary
+                    island_name = ISLAND_NAMES[island_number]
+                    visited = False
                     island_rect = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
-                    self.islands[ISLANDNAMES[num_islands]] = (False, island_rect)
-                    num_islands += 1
+                    self.islands[island_name] = (visited, island_rect)
+                    island_number += 1
                 else:
+                    # Draw ocean where there are no islands
                     self.draw_surface(water, (left, top))
                     if not ship_placed:
                         self.ship_pos = (left + MARGIN, top + MARGIN)
@@ -249,7 +305,7 @@ class MainGui(gui.Desktop):
         self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
 
     def run(self):
-        global NUMTURNS, moves_left
+        global NUM_TURNS, moves_left
         screen_rect = self.get_map_area()
         
         self.init()
@@ -279,7 +335,7 @@ class MainGui(gui.Desktop):
                         mouse_clicked = True
             
             map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-            if map_tile_x != None and map_tile_y != None and NUMTURNS > 0:
+            if map_tile_x != None and map_tile_y != None and NUM_TURNS > 0:
                 self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 # The mouse is currently over a box.
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
@@ -288,9 +344,9 @@ class MainGui(gui.Desktop):
                         moves_left-= self.block_distance(left, top, self.ship_pos)
                         # decrement number of turns
                         if moves_left == 0:
-                            moves_left = MOVESPTURN
-                            NUMTURNS-=1
-                            update_label(turns_label, str(NUMTURNS))
+                            moves_left = MOVES_PER_TURN
+                            NUM_TURNS-=1
+                            update_label(turns_label, str(NUM_TURNS))
                         update_label(moves_label, str(moves_left))
                 
                         self.ship_pos = (left, top) # move the ship
@@ -319,7 +375,7 @@ class MainGui(gui.Desktop):
                                     # Mark as visited
                                     self.islands[island] = (True, island_rect)
                                     
-                                    if set(winning_spices).issubset(set(spices_collected)):
+                                    if set(winning_spices).issubset(set(spices_collected)) or island == "Atlantis":
                                         update_table(score_table, "You Won!")
             
             # Redraw the screen and wait a clock tick.
@@ -356,8 +412,11 @@ class MainGui(gui.Desktop):
         return islands_here
     
     def highlight_border(self, map_tile_x, map_tile_y, ship_pos, canvas):
+        color = None
         left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-        if self.is_reachable(left, top, ship_pos, canvas):
+        if (left, top) == ship_pos:
+            color = WHITE
+        elif self.is_reachable(left, top, ship_pos, canvas):
             if self.nearby_islands(map_tile_x, map_tile_y, canvas):
                 color = GREEN
             else:
@@ -396,7 +455,7 @@ class MainGui(gui.Desktop):
 
 def main():
     pygame.init()
-    disp = pygame.display.set_mode((800,480))
+    disp = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
