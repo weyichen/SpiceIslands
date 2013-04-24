@@ -5,31 +5,50 @@ import map
 from perlin_noise import *
 from island_generator import *
 import numpy as np
+
 # the following line is not needed if pgu is installed
 sys.path.insert(0, "pgu")
 from pgu import gui # TODO: figure out how to install pgu
 
-# GUI debugging mode: do not generate map
-gui_debug = True
-
 # global variable settings
 SHIP_NAME = "SANTA MARIA"
-NUM_TURNS = 30
-MOVES_PER_TURN = 3
+num_turns = 30
+moves_per_turn = 3
 
-# Graphical Parameters for Game Map
-FPS = 30 # frames per second, the general speed of the program
+""" Graphical Parameters for Game Map """
+
+# Display Scaling Factors
 SCREEN_WIDTH = 850 # size of window's width in pixels
 SCREEN_HEIGHT = 480 # size of window's height in pixels
+SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
 MAP_WIDTH = 600 # size of map's width in pixels
 MAP_HEIGHT = 480 # size of map's height in pixels
+MAP_SIZE = (MAP_WIDTH, MAP_HEIGHT)
+MAP_TILE_WIDTH = 20 # size of map tile's width in pixels
+MAP_TILE_HEIGHT = 20 # size of map tile's height in pixels
+MAP_TILE_SIZE = (MAP_TILE_WIDTH, MAP_TILE_HEIGHT)
+ISLAND_WIDTH = 6 * MAP_TILE_WIDTH # size of island bounding box height & width in pixels
+ISLAND_HEIGHT = 6 * MAP_TILE_HEIGHT # size of island bounding box height & width in pixels
+ISLAND_SIZE = (ISLAND_WIDTH, ISLAND_HEIGHT)
+
+# Other scale constants
 MARGIN = 20
-MAP_TILE_SIZE = 20 # size of box height & width in pixels
+MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / MAP_TILE_WIDTH # number of columns of icons
+MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / MAP_TILE_HEIGHT # number of rows of icons
+
+# Non-scaling constants
+FPS = 30 # frames per second, the general speed of the program
 BG_COLOR_LEVEL = 25
-ISLAND_SIZE = 6 * MAP_TILE_SIZE # size of island bounding box height & width in pixels
 NUM_ISLANDS = 7
-MAP_COLUMNS = (MAP_WIDTH - 2 * MARGIN) / MAP_TILE_SIZE # number of columns of icons
-MAP_ROWS = (MAP_HEIGHT - 2 * MARGIN) / MAP_TILE_SIZE # number of rows of icons
+
+# Very basic quality control on constant parameters
+assert MAP_WIDTH <= SCREEN_WIDTH
+assert MAP_HEIGHT <= SCREEN_HEIGHT
+assert MAP_TILE_WIDTH <= ISLAND_WIDTH
+assert MAP_TILE_HEIGHT <= ISLAND_HEIGHT
+assert MAP_COLUMNS >= 10
+assert MAP_ROWS >= 10
+
 # COLORS
 # NAME     (   R,   G,   B)
 OCEAN    = (  25, 135, 255)
@@ -40,20 +59,21 @@ WHITE    = ( 255, 255, 255)
 
 # GUI Elements that need to be updated
 spice_table = gui.List(width=150, height=100)
+resource_table = gui.List(width=150, height=100)
 score_table = gui.List(width=150, height=100)
-turns_label = gui.Label(str(NUM_TURNS))
-moves_label = gui.Label(str(MOVES_PER_TURN))
+turns_label = gui.Label(str(num_turns))
+moves_label = gui.Label(str(moves_per_turn))
 ship_label = gui.Label(SHIP_NAME)
 
 # Variables that keep track of the state of the game
-moves_left = MOVES_PER_TURN
+dialog_on = False
+moves_left = moves_per_turn
 spices_collected = []
+resources_collected = []
 winning_spices = ["clove"]
-event_img = "./Images/Spices/Fennel.png"
-event_msg = ""
 
 # proper nouns
-SPICE_LIST = ["clove","cardomom","nutmeg","mace","anise",
+SPICE_LIST = ["clove","cardamom","nutmeg","mace","anise",
         "cinnamon","pepper","cumin","camphor","fennel"]
         
 RESOURCE_LIST = ["sago","rice","tempeh","orangutan","guilders","cloth","wood"]
@@ -68,87 +88,155 @@ def set_event(image, message):
     global event_img, event_msg
     event_img = "./Images/" + image + ".png"
     event_msg = message
+    
+    event_dialog = EventDialog()
+    event_dialog.open()
 
 # events that can occur on the high seas!        
 # we use a dictionary to map the randomly generated number to events
      
 def natives_attack():
-    global NUM_TURNS, spices_collected
+    global num_turns, spices_collected
+    num_spices = len(spices_collected)
     
-    set_event("Events/attack", "The natives are hostile! You lose a turn and a random spice!")
-    NUM_TURNS -= 1
-    if len(spices_collected) > 0 :
+    if (num_spices):
         spice_no = random.randint(0,len(spices_collected)-1)
+        spice = spices_collected[spice_no]
         spices_collected.pop(spice_no)
         set_table(spice_table, spices_collected)
+        set_event("Events/attack", "The natives are hostile! You lose a turn and your " + spice + ".")
+    else:
+        set_event("Events/attack", "The natives are hostile! You lose a turn.")
+    
+    num_turns -= 1
+
      
 def natives_help():
-    global NUM_TURNS, spices_collected
-    
-    set_event("Events/help", "The natives are friendly! You gain a turn and a random spice!")
-    NUM_TURNS += 1
-    spice_no = random.randint(0,len(SPICE_LIST))
-    spices_collected.append(SPICE_LIST[spice_no])
+    global num_turns, spices_collected
+    spice_no = random.randint(0,len(SPICE_LIST) - 1)
+    spice = SPICE_LIST[spice_no]
+    spices_collected.append(spice)
     set_table(spice_table, spices_collected)
+    set_event("Events/help", "The natives are friendly! You gain a turn and some " + spice + ".")
+    
+    num_turns += 1
 
 def find_resource():
-    event_img = "Resources/orangutan" 
-    event_msg = ""
+    global resources_collected    
+    resource_no = random.randint(0,len(RESOURCE_LIST) - 1)
+    resource = RESOURCE_LIST[resource_no]
+    set_event("Resources/" + resource, "Fortune smiles upon you! You have found " + resource + ".")
+    
+    resources_collected.append(resource)
+    set_table(resource_table, resources_collected)
     
 def malaria():
-    event_img = "Events/malaria" 
-    event_msg = "" 
+    global moves_per_turn
+    set_event("Events/malaria", "A crew member has succumbed to malaria. You lose one move per turn!")
+    
+    moves_per_turn -= 1
     
 def voc_bad():
-    event_img = "Events/VOC" 
-    event_msg = "" 
+    global resources_collected
+    num_resources = len(resources_collected)
+    
+    if (num_resources):
+        resource_no = random.randint(0,len(resources_collected) - 1)
+        resource = RESOURCE_LIST[resource_no]
+        resources_collected.pop(resource_no)
+        set_event("Events/voc", "Fellow VOC employees are in need. You give them your " + resource + ".")
 
 def voc_good():
-    event_img = "Events/VOC" 
-    event_msg = "" 
+    global moves_per_turn
+    set_event("Events/voc", "The VOC is pleased with your efforts. A new crew member has been recruited " + \
+            "into your service. You gain one move per turn!")
+    
+    moves_per_turn -= 1
 
 def typhoon():
-    event_img = "Events/typhoon" 
-    event_msg = "" 
-
+    global num_turns, spices_collected
+    num_spices = len(spices_collected)
+    
+    if (num_spices):
+        set_event("Events/typhoon", "You are caught in a typhoon! A spice is washed off board and lost in the sea. " + \
+            "You also lose one turn to inclement weather.")
+        spice_no = random.randint(0,len(spices_collected)-1)
+        spice = spices_collected[spice_no]
+        spices_collected.pop(spice_no)
+        set_table(spice_table, spices_collected)
+    else:
+        set_event("Events/typhoon", "You are caught in a typhoon! You lose one turn to inclement weather.")
+    
+    num_turns -= 1
+    
 def cyclone():
-    event_img = "Events/cyclone" 
-    event_msg = "" 
+    global num_turns
+    
+    set_event("Events/cyclone", "A cyclone is brewing, and you are forced to wait for clearer skies. " \
+            "You lose one turn to inclement weather.")
+    num_turns -= 1
 
 def scurvy():
-    event_img = "Events/scurvy" 
-    event_msg = "" 
+    global moves_per_turn
+    set_event("Events/scurvy", "You should have stocked up on limes! A crew member has succumbed to scurvy. " + \
+            "You lose one move per turn!")
+    
+    moves_per_turn -= 1
 
 def pirates():
-    event_img = "Events/pirates" 
-    event_msg = "" 
+    global resources_collected
+    num_resources = len(resources_collected)
+    
+    if (num_resources):
+        resource_no = random.randint(0,len(resources_collected) - 1)
+        resource = RESOURCE_LIST[resource_no]
+        resources_collected.pop(resource_no)
+        set_event("Events/pirates", "AAAARGHH! Pirates have stolen your " + resource + ".")
 
 def flotsam():
-    event_img = "Events/flotsam" 
-    event_msg = "" 
+    global resources_collected
+    resource_no = random.randint(0,len(RESOURCE_LIST) - 1)
+    resource = RESOURCE_LIST[resource_no]
+    set_event("Resources/" + resource, "You narrowly missed a storm in this area. As you pass the remains of a " + \
+            "shipwreck, you find some valuable " + resource + ".")
+    
+    resources_collected.append(resource)
+    set_table(resource_table, resources_collected)
 
 def lost_at_sea():
-    event_img = "Events/lost_at_sea" 
-    event_msg = "" 
+    global num_turns
+    set_event("Events/lost_at_sea", "What have you been doing with your sextant?! Due to poor navigation, " + \
+            "you have become lost at sea. You lose 2 turns!")
+            
+    num_turns -= 1
 
 def treasure():
-    event_img = "Events/treasure" 
-    event_msg = "" 
+    global resources_collected
+    set_event("Events/treasure", "You have discovered sunken treasure!")
+    
+    resources_collected.append("treasure")
 
 def fish():
-    event_img = "Events/fish" 
-    event_msg = ""
+    global moves_per_turn
+    set_event("Events/fish", "Fishing has yielded better than normal hauls lately. Your crew is well fed, so you gain " + \
+            "1 move per turn.")
+            
+    moves_per_turn += 1
 
 # helper method to check if win or lose conditions have been met
-def game_over():
+def check_game_over():
+    global num_turns
+    
     if set(winning_spices).issubset(set(spices_collected)):
+        num_turns = 0
         over_msg = "You have collected all the required spices! Your riches will be told in legends for generations to come!"
         set_event("Events/won", over_msg)
         over_dialog = GameoverDialog()
         over_dialog.open()
         
-    elif NUM_TURNS == 0 or MOVES_PER_TURN == 0:
-        if MOVES_PER_TURN == 0:
+    elif num_turns == 0 or moves_per_turn == 0:
+        if moves_per_turn == 0:
+            num_turns = 0
             over_msg = "You were lucky to be the last survivor of your crew. Now you are dead."
         else:
             over_msg = "You have run out of time. The VOC will not be pleased to hear of your failure."      
@@ -223,18 +311,18 @@ class InitDialog(gui.Dialog):
         
         winit.tr()
         winit.td(gui.Label("Number of Turns"))
-        turn_slider = gui.HSlider(value=NUM_TURNS,min=2,max=75,size=32,width=175,height=16)
+        turn_slider = gui.HSlider(value=num_turns,min=2,max=75,size=32,width=175,height=16)
         winit.td(turn_slider)
         turn_slider.connect(gui.CLICK, self.adj_scroll, (0, turn_slider))
-        self.turn_label = gui.Label(str(NUM_TURNS))
+        self.turn_label = gui.Label(str(num_turns))
         winit.td(self.turn_label)
         
         winit.tr()
         winit.td(gui.Label("Moves per Turn"))
-        move_slider = gui.HSlider(value=MOVES_PER_TURN,min=3,max=10,size=32,width=175,height=16)
+        move_slider = gui.HSlider(value=moves_per_turn,min=3,max=10,size=32,width=175,height=16)
         winit.td(move_slider)
         move_slider.connect(gui.CLICK, self.adj_scroll, (1, move_slider))
-        self.move_label = gui.Label(str(MOVES_PER_TURN))
+        self.move_label = gui.Label(str(moves_per_turn))
         winit.td(self.move_label)
         
         winit.tr()
@@ -254,13 +342,13 @@ class InitDialog(gui.Dialog):
     
     # sets values
     def confirm(self):
-        global SHIP_NAME, NUM_TURNS, MOVES_PER_TURN
+        global SHIP_NAME, num_turns, moves_per_turn
         SHIP_NAME = self.name_input.value
-        NUM_TURNS = int(self.turn_label.value)
-        MOVES_PER_TURN = int(self.move_label.value)
+        num_turns = int(self.turn_label.value)
+        moves_per_turn = int(self.move_label.value)
         update_label(ship_label, SHIP_NAME)
-        update_label(turns_label, NUM_TURNS)
-        update_label(moves_label, MOVES_PER_TURN)
+        update_label(turns_label, num_turns)
+        update_label(moves_label, moves_per_turn)
         self.close()
 
 class EventDialog(gui.Dialog):
@@ -285,8 +373,8 @@ class EventDialog(gui.Dialog):
         gui.Dialog.__init__(self,title,doc)
     
     def confirm(self):
-        update_label(turns_label, NUM_TURNS)
-        update_label(moves_label, MOVES_PER_TURN)
+        update_label(turns_label, num_turns)
+        update_label(moves_label, moves_per_turn)
         self.close()
 
 class GameoverDialog(gui.Dialog):
@@ -314,9 +402,9 @@ class GameoverDialog(gui.Dialog):
         self.close()        
         
 class Island:
-    def __init__(self, name, left, top):
+    def __init__(self, name, loc):
         self.name = name
-        self.area = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
+        self.area = pygame.Rect(loc, ISLAND_SIZE)
         self.visited = False
         
     def discovered(self):
@@ -328,8 +416,8 @@ class Island:
     def get_area(self):
         return self.area
         
-    def contains(self, left, top):
-        tile_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
+    def contains(self, loc):
+        tile_rect = pygame.Rect(loc, MAP_TILE_SIZE)
         return self.area.colliderect(tile_rect)
         
     def visit(self):
@@ -350,14 +438,11 @@ class DrawingArea(gui.Widget):
         
 class MainGui(gui.Desktop):
     """ The main GUI wrapper for our game """
-    game_area_w = MAP_WIDTH
-    game_area_h = MAP_HEIGHT
-    game_area = None
 
     def make_island_minimaps(self):
         """ Use the island generator to create island minimaps for the game map """
-        noise_w = ISLAND_SIZE / 2
-        noise_h = ISLAND_SIZE / 2
+        noise_w = ISLAND_WIDTH / 2
+        noise_h = ISLAND_HEIGHT / 2
         noise_f = 3
         noise_o = 3
         minimaps = []
@@ -366,12 +451,14 @@ class MainGui(gui.Desktop):
                     IslandGenerator().generate_island(noise_w, noise_h, noise_f, noise_o))
             world.draw_minimap()
             minimaps.append(world.minimap)
+        # Make sure the number of island minimaps is correct
+        assert len(minimaps) == NUM_ISLANDS
         return minimaps
         
     def make_ocean_surface(self):
         """ Create a smooth-looking ocean surface image using varying intensities of blue """
         p = PerlinNoiseGenerator()
-        blue_values = np.array(p.generate_noise(ISLAND_SIZE, ISLAND_SIZE, 1.5, 3))
+        blue_values = np.array(p.generate_noise(ISLAND_WIDTH, ISLAND_HEIGHT, 1.5, 3))
         red_green_values = np.zeros(blue_values.shape, dtype=np.int8)
         red_green_values.fill(25)
         rgb = np.transpose(np.array([red_green_values, red_green_values, blue_values]))
@@ -398,6 +485,8 @@ class MainGui(gui.Desktop):
                     free += 1
             if free == len(island_positions):
                 clustered = False
+        # Ensure we have placed the right number of islands
+        assert len(island_positions) == NUM_ISLANDS
         return island_positions
         
     def make_game_map(self):
@@ -407,8 +496,12 @@ class MainGui(gui.Desktop):
         self.islands = []
         
         island_number = 0
-        num_cols = MAP_WIDTH / ISLAND_SIZE
-        num_rows = MAP_HEIGHT / ISLAND_SIZE
+        num_cols = MAP_WIDTH / ISLAND_WIDTH
+        num_rows = MAP_HEIGHT / ISLAND_HEIGHT
+        
+        # Ensure the map is big enough
+        assert num_cols >= 2
+        assert num_rows >= 2
         
         # Pick the desired number of island locations such that no two are adjacent
         island_positions = self.spread_islands(num_cols, num_rows)
@@ -425,19 +518,20 @@ class MainGui(gui.Desktop):
         
         for x in cols:
             for y in rows:
-                (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
+                location = (x * ISLAND_WIDTH, y * ISLAND_HEIGHT)
                 if (x, y) in island_positions:
                     # Draw island on map
                     minimap = island_minimaps[island_number]
-                    self.draw_surface(minimap, (left, top))
+                    self.draw_surface(minimap, location)
                     # Create and store an island object
                     island_name = ISLAND_NAMES[island_number]
-                    self.islands.append(Island(island_name, left, top))
+                    self.islands.append(Island(island_name, location))
                     island_number += 1
                 else:
                     # Draw ocean where there are no islands
-                    self.draw_surface(water, (left, top))
+                    self.draw_surface(water, location)
                     if not ship_placed:
+                        left, top = location
                         self.ship_pos = (left + MARGIN, top + MARGIN)
                         ship_placed = True
                         
@@ -447,7 +541,9 @@ class MainGui(gui.Desktop):
     def load_splashscreen(self, display):
         """ Display a splashscreen while the main game is loading """
         raw_splash_img = pygame.image.load(os.path.join('Images', 'splash.png'))
-        splash_img = pygame.transform.smoothscale(raw_splash_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        splash_img = pygame.transform.smoothscale(raw_splash_img, SCREEN_SIZE)
+        # Check for correct resizing
+        assert splash_img.get_size() == SCREEN_SIZE
         display.blit(splash_img, (0, 0))
         pygame.display.update()
         
@@ -493,7 +589,7 @@ class MainGui(gui.Desktop):
         self.load_splashscreen(disp)
 
         # Setup the 'game' area where the action takes place and a sidebar for the menu
-        self.game_area = DrawingArea(self.game_area_w, self.game_area_h)
+        self.game_area = DrawingArea(MAP_WIDTH, MAP_HEIGHT)
         menu = self.make_menu_sidebar()
         
         # set up the overall layout
@@ -505,15 +601,13 @@ class MainGui(gui.Desktop):
         
         # Load ship image
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
-        self.ship_img = pygame.transform.smoothscale(raw_ship_img, (MAP_TILE_SIZE, MAP_TILE_SIZE))
+        self.ship_img = pygame.transform.smoothscale(raw_ship_img, MAP_TILE_SIZE)
+        # Check for correct resizing
+        assert self.ship_img.get_size() == MAP_TILE_SIZE
         
         # game setup dialog
         init_dialog = InitDialog()
         self.connect(gui.INIT, init_dialog.open, None)
-        
-        # only for testing purposes right now
-        #event_dialog = EventDialog()
-        #self.connect(gui.INIT, event_dialog.open, None)
         
         # Create the main game map
         self.make_game_map()
@@ -548,7 +642,7 @@ class MainGui(gui.Desktop):
                         mouse_clicked = True
             
             map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-            if map_tile_x != None and map_tile_y != None and NUM_TURNS > 0:
+            if map_tile_x != None and map_tile_y != None and num_turns > 0:
                 # The mouse is currently over a box.
                 self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
@@ -561,7 +655,7 @@ class MainGui(gui.Desktop):
                         for island in nearby:
                             self.visit_island(island)
     
-                    game_over() # check if the game is over
+                    check_game_over() # check if the game is over
     
             # Redraw the screen and wait a clock tick.
             self.repaint()
@@ -572,14 +666,14 @@ class MainGui(gui.Desktop):
         """ Move the ship to the specified destination, redraw the display,
             and adjust the moves and turns remaining accordingly.
         """
-        global moves_left, NUM_TURNS
+        global moves_left, num_turns
         # decrement number of moves by the distance traveled
         moves_left-= self.block_distance(left, top, self.ship_pos)
         # decrement number of turns
         if moves_left == 0:
-            moves_left = MOVES_PER_TURN
-            NUM_TURNS-=1
-            update_label(turns_label, str(NUM_TURNS))
+            moves_left = moves_per_turn
+            num_turns-=1
+            update_label(turns_label, str(num_turns))
         update_label(moves_label, str(moves_left))
         
         self.ship_pos = (left, top) # move the ship
@@ -594,9 +688,7 @@ class MainGui(gui.Desktop):
         land_event_gen = random.randint(0,22)
         if land_event_gen < 11 :
             land_events[land_event_gen]()
-            print(land_event_gen)
-            event_dialog = EventDialog()
-            event_dialog.open()
+            
         
         if island.discovered():
             island.visit()
@@ -605,6 +697,9 @@ class MainGui(gui.Desktop):
             the_spice = SPICE_LIST[spice_no]
             spices_collected.append(the_spice)
             set_table(spice_table, spices_collected)
+            
+            set_event("Spices/"+the_spice, "You collected " + \
+                    the_spice+" from " + island.get_name() + ".")
             
             if set(winning_spices).issubset(set(spices_collected)):
                 update_table(score_table, "You Won!")
@@ -615,7 +710,7 @@ class MainGui(gui.Desktop):
         """
         destination = np.array([left, top])
         current_location = np.array(ship_pos)
-        return int(np.linalg.norm(destination - current_location) / MAP_TILE_SIZE)
+        return int(np.linalg.norm(destination - current_location) / np.linalg.norm(np.array(MAP_TILE_SIZE)))
     
     def is_reachable(self, left, top, ship_pos, canvas):
         """ Determine whether or not the user's intended destination
@@ -642,7 +737,7 @@ class MainGui(gui.Desktop):
                     slice = canvas[left:left+39,top:top+39, :-1]
                     if self.is_island(slice):
                         for island in self.islands:
-                            if island.contains(left, top):
+                            if island.contains((left, top)):
                                 islands_here.append(island)
         return islands_here
     
@@ -664,7 +759,7 @@ class MainGui(gui.Desktop):
             color = RED
         
         pygame.draw.rect(self.game_area.image_buffer, color, 
-                (left - 5, top - 5, MAP_TILE_SIZE + 10, MAP_TILE_SIZE + 10), 4)
+                (left - 5, top - 5, MAP_TILE_WIDTH + 10, MAP_TILE_HEIGHT + 10), 4)
         return
 
     def map_tile_corner(self, map_tile_x, map_tile_y):
@@ -672,8 +767,8 @@ class MainGui(gui.Desktop):
             specified tile of the game map.
         """
         # Convert board coordinates to pixel coordinates
-        left = map_tile_x * MAP_TILE_SIZE + MARGIN
-        top = map_tile_y * MAP_TILE_SIZE + MARGIN
+        left = map_tile_x * MAP_TILE_WIDTH + MARGIN
+        top = map_tile_y * MAP_TILE_HEIGHT + MARGIN
         return (left, top) 
 
     def get_map_tile_at_pixel(self, x, y):
@@ -683,9 +778,9 @@ class MainGui(gui.Desktop):
         screen_rect = self.get_map_area()
         for map_tile_x in range(MAP_COLUMNS):
             for map_tile_y in range(MAP_ROWS):
-                left, top = self.map_tile_corner(map_tile_x, map_tile_y)
-                box_rect = pygame.Rect(left, top, MAP_TILE_SIZE, MAP_TILE_SIZE)
-                if box_rect.collidepoint(x - screen_rect.x, y - screen_rect.y):
+                loc = self.map_tile_corner(map_tile_x, map_tile_y)
+                tile_rect = pygame.Rect(loc, MAP_TILE_SIZE)
+                if tile_rect.collidepoint(x - screen_rect.x, y - screen_rect.y):
                     return (map_tile_x, map_tile_y)
         return (None, None)
     
@@ -703,7 +798,7 @@ class MainGui(gui.Desktop):
 
 def main():
     pygame.init()
-    disp = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    disp = pygame.display.set_mode(SCREEN_SIZE)
     pygame.display.set_caption('Spice Islands')
     gui = MainGui(disp)
     gui.run()
