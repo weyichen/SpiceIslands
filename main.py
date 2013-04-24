@@ -69,7 +69,7 @@ moves_label = gui.Label(str(moves_per_turn))
 ship_label = gui.Label(ship_name)
 
 # Variables that keep track of the state of the game
-dialog_on = False
+dialog_on = True
 dialog_q = Queue.LifoQueue()
 moves_left = moves_per_turn
 spices_collected = []
@@ -159,7 +159,7 @@ def voc_good():
     set_event("Events/voc", "The VOC is pleased with your efforts. A new crew member has been recruited " + \
             "into your service. You gain one move per turn!")
     
-    moves_per_turn -= 1
+    moves_per_turn += 1
 
 def typhoon():
     global num_turns, spices_collected
@@ -339,6 +339,15 @@ class InitDialog(gui.Dialog):
         self.move_label = gui.Label(str(moves_per_turn))
         winit.td(self.move_label)
         
+        
+        winit.tr()
+        winit.td(gui.Label("Spices Needed to Win"))
+        spice_slider = gui.HSlider(value=NUM_ISLANDS-2,min=3,max=NUM_ISLANDS+3,size=32,width=175,height=16)
+        winit.td(spice_slider)
+        spice_slider.connect(gui.CLICK, self.adj_scroll, (2, spice_slider))
+        self.spice_label = gui.Label(str(NUM_ISLANDS-2))
+        winit.td(self.spice_label)
+        
         winit.tr()
         okay_button = gui.Button("Okay")
         okay_button.connect(gui.CLICK,self.confirm)
@@ -351,8 +360,10 @@ class InitDialog(gui.Dialog):
         (num, slider) = value
         if num == 0:
             update_label(self.turn_label, str(slider.value))
-        if num == 1:
+        elif num == 1:
             update_label(self.move_label, str(slider.value))
+        elif num == 2:
+            update_label(self.spice_label, str(slider.value))
     
     def confirm(self):
         """ sets values and exits """
@@ -363,8 +374,8 @@ class InitDialog(gui.Dialog):
         update_label(ship_label, ship_name)
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
-        dialog_on = False
         self.close()
+        dialog_on = False
 
 class EventDialog(gui.Dialog):
     """ Dialogs that display when random events occur."""
@@ -395,8 +406,8 @@ class EventDialog(gui.Dialog):
         global dialog_on
         update_label(turns_label, num_turns)
         update_label(moves_label, moves_per_turn)
-        dialog_on = False
         self.close()
+        dialog_on = False
 
 class GameOverDialog(gui.Dialog):
     """ Dialogs that display when the game ends, one way or another. """
@@ -425,8 +436,8 @@ class GameOverDialog(gui.Dialog):
     def confirm(self):
         """ sets values and exits """
         global dialog_on
+        self.close()
         dialog_on = False
-        self.close()        
         
 class Island:
     """ An object that represents a single island on the map. """
@@ -584,8 +595,7 @@ class MainGui(gui.Desktop):
         
         # row 1: name of ship
         menu.tr()
-        name_label = gui.Label(ship_name)
-        menu.td(name_label)
+        menu.td(ship_label)
         
         # sidebar row 1: tables of spices on hand and spices needed to win
         menu.tr()
@@ -652,7 +662,10 @@ class MainGui(gui.Desktop):
         FPSCLOCK = pygame.time.Clock()
         mouse_x = 0 # used to store x coordinate of mouse event
         mouse_y = 0 # used to store y coordinate of mouse event
-                
+        
+        # Prevent mouse input to map while dialog boxes are open
+        delayInput = True
+        
         while True:
             mouse_clicked = False
             map_tile_x, map_tile_y = None, None
@@ -670,15 +683,19 @@ class MainGui(gui.Desktop):
                     sys.exit()
                 elif event.type == MOUSEMOTION:
                     mouse_x, mouse_y = event.pos
+                    if dialog_on:
+                        delay_input = True
+                    else:
+                        delay_input = False
                 elif event.type == MOUSEBUTTONUP:
                     # only get map position if we clicked inside map
                     screen_rect = self.get_map_area()
                     mouse_x, mouse_y = event.pos
-                    if mouse_x > screen_rect.x and not dialog_on:
+                    if mouse_x > screen_rect.x and not delay_input:
                         mouse_clicked = True
             
             map_tile_x, map_tile_y = self.get_map_tile_at_pixel(mouse_x, mouse_y)
-            if map_tile_x != None and map_tile_y != None and not dialog_on and num_turns > 0:
+            if map_tile_x != None and map_tile_y != None and not delay_input and num_turns > 0:
                 # The mouse is currently over a box.
                 self.highlight_border(map_tile_x, map_tile_y, self.ship_pos, self.canvas)
                 left, top = self.map_tile_corner(map_tile_x, map_tile_y)
