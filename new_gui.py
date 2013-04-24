@@ -205,22 +205,57 @@ class MainGui(gui.Desktop):
             if free == len(island_positions):
                 clustered = False
         return island_positions
-    
-    def __init__(self, disp):
-        gui.Desktop.__init__(self)
         
-        self.connect(gui.QUIT, self.quit, None)
+    def make_game_map(self):
+        """ Generate a random game map and initialize the display """
+        ship_placed = False
+        self.ship_pos = None
+        self.islands = {}
         
-        # Display splashscreen while loading
+        island_number = 0
+        num_cols = MAP_WIDTH / ISLAND_SIZE
+        num_rows = MAP_HEIGHT / ISLAND_SIZE
+        
+        # Pick the desired number of island locations such that no two are adjacent
+        island_positions = self.spread_islands(num_cols, num_rows)
+        
+        # Generate random islands and a water surface to display
+        island_minimaps = self.make_island_minimaps()
+        water = self.make_ocean_surface()
+        
+        print num_rows, num_cols
+        for x in range(num_cols):
+            for y in range(num_rows):
+                (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
+                if (x, y) in island_positions:
+                    print (x, y, x + y * num_cols)
+                    # Draw island on map
+                    minimap = island_minimaps[island_number]
+                    self.draw_surface(minimap, (left, top))
+                    # Store island in dictionary
+                    island_name = ISLAND_NAMES[island_number]
+                    visited = False
+                    island_rect = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
+                    self.islands[island_name] = (visited, island_rect)
+                    island_number += 1
+                else:
+                    # Draw ocean where there are no islands
+                    self.draw_surface(water, (left, top))
+                    if not ship_placed:
+                        self.ship_pos = (left + MARGIN, top + MARGIN)
+                        ship_placed = True
+                        
+        # Capture initial map layout for future redrawing
+        self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
+        
+    def load_splashscreen(self, display):
+        """ Display a splashscreen while the main game is loading """
         raw_splash_img = pygame.image.load(os.path.join('Images', 'splash.png'))
         splash_img = pygame.transform.smoothscale(raw_splash_img, (SCREEN_WIDTH, SCREEN_HEIGHT))
-        disp.blit(splash_img, (0, 0))
+        display.blit(splash_img, (0, 0))
         pygame.display.update()
-
-        # Setup the 'game' area where the action takes place
-        self.game_area = DrawingArea(self.game_area_w,
-                                    self.game_area_h)
-                                    
+        
+    def make_menu_sidebar(self):
         menu = gui.Table(width=100, height=300, vpadding = 0, hpadding = 2, valign = -1)
         
         # row 1: name of ship
@@ -251,58 +286,32 @@ class MainGui(gui.Desktop):
         menu.td(gui.Label("Islands Visited"))
         menu.tr()
         menu.td(score_table, align=-1, valign=-1)
+        return menu
+    
+    def __init__(self, disp):
+        gui.Desktop.__init__(self)
+        self.connect(gui.QUIT, self.quit, None)
         
-        spacer = gui.Table(width=800, height=100, vpadding = 0, hpadding = 2, valign = -1)
+        # Display splashscreen while loading
+        self.load_splashscreen(disp)
+
+        # Setup the 'game' area where the action takes place and a sidebar for the menu
+        self.game_area = DrawingArea(self.game_area_w, self.game_area_h)
+        menu = self.make_menu_sidebar()
         
         # set up the overall layout
         tbl = gui.Table(height=disp.get_height())
         tbl.tr()
         tbl.td(menu)
         tbl.td(self.game_area)
-        
         self.init(tbl, disp)
         
+        # Load ship image
         raw_ship_img = pygame.image.load(os.path.join('Images', 'sailboat.png'))
         self.ship_img = pygame.transform.smoothscale(raw_ship_img, (BOX_SIZE, BOX_SIZE))
         
-        ship_placed = False
-        self.ship_pos = None
-        
-        self.islands = {}
-        island_number = 0
-        
-        num_cols = MAP_WIDTH / ISLAND_SIZE
-        num_rows = MAP_HEIGHT / ISLAND_SIZE
-        
-        # Pick the desired number of island locations such that no two are adjacent
-        island_positions = self.spread_islands(num_cols, num_rows)
-        
-        island_minimaps = self.make_island_minimaps()
-        water = self.make_ocean_surface()
-        
-        print num_rows, num_cols
-        for x in range(num_cols):
-            for y in range(num_rows):
-                (left, top) = (x * ISLAND_SIZE, y * ISLAND_SIZE)
-                if (x, y) in island_positions:
-                    print (x, y, x + y * num_cols)
-                    # Draw island on map
-                    minimap = island_minimaps[island_number]
-                    self.draw_surface(minimap, (left, top))
-                    # Store island in dictionary
-                    island_name = ISLAND_NAMES[island_number]
-                    visited = False
-                    island_rect = pygame.Rect(left, top, ISLAND_SIZE, ISLAND_SIZE)
-                    self.islands[island_name] = (visited, island_rect)
-                    island_number += 1
-                else:
-                    # Draw ocean where there are no islands
-                    self.draw_surface(water, (left, top))
-                    if not ship_placed:
-                        self.ship_pos = (left + MARGIN, top + MARGIN)
-                        ship_placed = True
-        
-        self.canvas = pygame.surfarray.array3d(self.game_area.image_buffer)
+        # Create the main game map
+        self.make_game_map()
 
     def run(self):
         global NUM_TURNS, moves_left
